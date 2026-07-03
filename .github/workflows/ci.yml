@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  ruff:
+    name: ruff check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Install dependencies
+        run: uv sync --group dev
+      - name: Run ruff
+        run: uv run ruff check .
+
+  pytest:
+    name: pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Install dependencies
+        run: uv sync --group dev
+      - name: Run pytest
+        run: uv run pytest
+
+  lint-gate:
+    name: golden lint gate (verilator)
+    runs-on: ubuntu-latest
+    # This job installs Verilator and runs the golden-file lint regression
+    # (WP-04/WP-08). No golden tests exist yet as of WP-00, so the job is
+    # allowed to fail/no-op without blocking CI. Remove continue-on-error
+    # once WP-04 and WP-08 land.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Install Verilator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y verilator
+      - name: Install dependencies
+        run: uv sync --group dev
+      - name: Run golden lint gate
+        run: |
+          if [ -d backend/tests/golden ] && find backend/tests/golden -name 'test_*.py' | grep -q .; then
+            uv run pytest backend/tests/golden -k lint
+          else
+            echo "No golden lint tests yet (WP-04/WP-08 pending) — skipping."
+          fi
