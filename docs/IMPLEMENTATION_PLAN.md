@@ -483,6 +483,22 @@ weaker model exceeds its savings here.
 
 Critical path: WP-00 → 01 → 02 → 03 → (05i fsm, longest snippet) → 08 → 10.
 
+## 6b. Domain Reference: VLSI Agent Kit
+
+The user's VLSI Agent Kit at `D:\Projects\VLSI-agkit\.agent\skills\` provides
+domain knowledge modules. Dispatch prompts for RTL-producing WPs should
+instruct the agent to read the relevant SKILL.md files as *reference material*
+(SemiCraft's own specs remain normative where they conflict — e.g. the kit's
+`i_`/`o_` port-prefix convention is NOT SemiCraft default style; prefixes are
+a user style option):
+
+| WP | Kit skills to read |
+|---|---|
+| WP-03, WP-05a–g | `clean-rtl`, `systemverilog-patterns` |
+| WP-05h cdc-synchronizer | above + `clock-domain-crossing` (assumptions/limitations content) |
+| WP-05i fsm | above + `fsm-design` |
+| WP-02 renderers (review) | `clean-rtl` (synthesizable-pattern checks) |
+
 ## 7. Sub-Agent Prompt Template
 
 When dispatching a WP, the prompt should contain: (1) pointer to this file +
