@@ -37,7 +37,9 @@ These rules are invariants; renderers and generators may rely on them.
    if-trees, so sync/async and polarity options cannot be applied
    inconsistently.
 5. **Canonical naming in IR; style applied at render.** IR names are
-   `lower_snake_case` ASCII identifiers. The style engine (`render/style.py`)
+   `lower_snake_case` ASCII identifiers, with one exception: `Param` names are
+   `UPPER_SNAKE_CASE` (RTL convention, e.g. `WIDTH`, `DEPTH`); validation
+   enforces both patterns. The style engine (`render/style.py`)
    applies user naming options (prefixes, suffixes, alternative conventions)
    and enforces the `_n` suffix for active-low signals during rendering. The
    renderer rejects names that collide with SV/Verilog reserved words *after*
@@ -87,7 +89,7 @@ top level) rather than encoding precedence — verbosity over ambiguity.
 | `Assign` | `lhs: Expr`, `rhs: Expr` | Operator chosen by context (design rule 3). `lhs` restricted to `Ref`, `Bit`, `Slice`, `Concat` of those. |
 | `If` | `cond: Expr`, `then: list[Stmt]`, `elifs: list[tuple[Expr, list[Stmt]]]`, `else_: list[Stmt] \| None` | |
 | `Case` | `sel: Expr`, `items: list[CaseItem]`, `default: list[Stmt] \| None`, `unique: bool = False` | `CaseItem(labels: list[Expr], body: list[Stmt])`. `unique=True` → SV `unique case`; Verilog renders plain `case` (a `Comment` notes the intent). `default` required unless the case is an enum case covering all members (validated). |
-| `Comment` | `text: str`, `level: normal\|verbose` | Filtered by style option (design rule 7). |
+| `Comment` | `text: str`, `level: normal\|verbose` | Filtered by style option (design rule 7). `none` is a render-time filter setting only, never a node level. |
 
 No loops, no blocking sequencing subtleties, no task/function calls in v0.1.
 
@@ -105,7 +107,7 @@ No loops, no blocking sequencing subtleties, no task/function calls in v0.1.
 | `ContAssign` | `lhs: Expr`, `rhs: Expr` | `assign lhs = rhs;` |
 | `AlwaysFF` | `clock: ClockSpec`, `reset: ResetSpec \| None`, `reset_body: list[Stmt]`, `body: list[Stmt]` | See §4. `reset=None` → no-reset register (then `reset_body` must be empty). |
 | `AlwaysComb` | `body: list[Stmt]` | SV: `always_comb`. Verilog: `always @(*)`. Full-assignment (no latch) checked by Verilator lint gate. |
-| `Instance` | `module: str`, `name: str`, `params: dict[str, Expr]`, `conns: dict[str, Expr]` | Named connections only, always `.port(expr)`. Used by the optional wrapper and Phase 2. |
+| `Instance` | `module: str`, `name: str`, `params: dict[str, Expr]`, `conns: dict[str, Expr]` | Named connections only, always `.port(expr)`. Used by the optional wrapper and Phase 2. Implementation note: stored internally as sorted tuples (nodes are frozen/hashable); renderers use the `.params_dict` / `.conns_dict` properties. Rule 3 (single driver) conservatively skips instance connections — the IR lacks the instantiated module's port directions. |
 
 Supporting specs:
 
@@ -150,7 +152,8 @@ case structure.
 bugs, not user errors; they fail loudly in tests and return HTTP 500, never
 silently degrade.
 
-1. All names are valid canonical identifiers; no duplicates among
+1. All names are valid canonical identifiers (`lower_snake_case`;
+   `UPPER_SNAKE_CASE` for params — design rule 5); no duplicates among
    params/ports/signals/enums.
 2. Every `Ref`/`EnumRef` resolves to a declared name.
 3. Single-driver rule: each signal driven by exactly one of {one procedural
