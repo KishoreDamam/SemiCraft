@@ -12,7 +12,8 @@ export type WidgetKind =
   | "toggle" // boolean
   | "number" // bounded integer/number
   | "chips" // array of string
-  | "text"; // string fallback
+  | "text" // string fallback
+  | "nested"; // nested object (e.g. Pydantic sub-model like NamingOptions)
 
 export interface EnumOption {
   value: string | number;
@@ -139,6 +140,13 @@ export function describeField(
     };
   }
 
+  // Nested object (Pydantic sub-model reached via $ref, e.g. NamingOptions).
+  // The flat MVP form has no widget for these; mark them so the renderer can
+  // skip them. Their value still round-trips via the snippet defaults.
+  if (type === "object" || s.properties) {
+    return { ...common, kind: "nested" };
+  }
+
   if (type === "array") {
     const item = s.items ? flattenSchema(s.items, root) : {};
     const itemEnum =
@@ -173,9 +181,10 @@ function normaliseBounds(s: JsonSchema): { min?: number; max?: number } {
 /** Ordered list of widget descriptors for an object schema's properties. */
 export function describeSchema(root: JsonSchema): WidgetDescriptor[] {
   if (!root.properties) return [];
-  return Object.entries(root.properties).map(([name, sub]) =>
-    describeField(name, sub, root),
-  );
+  return Object.entries(root.properties)
+    .map(([name, sub]) => describeField(name, sub, root))
+    // Nested-object fields have no flat widget; they submit at their default.
+    .filter((d) => d.kind !== "nested");
 }
 
 function humanize(name: string): string {

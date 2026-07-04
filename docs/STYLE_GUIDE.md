@@ -1,12 +1,5 @@
 # SemiCraft RTL Style Guide
 
-> **Draft — to be verified against renderer golden output when WP-02/WP-08 land.**
-> This document describes the intended output of `semicraft_core/render/`. Every
-> example below is written to match [`IR_SPEC.md`](IR_SPEC.md) §9 exactly. Once
-> WP-02's renderer and WP-08's golden matrix exist, this guide must be checked
-> line-by-line against golden output and any drift corrected here (the guide
-> follows the renderer, not the other way around).
-
 This is the default coding style SemiCraft generates. It applies to every
 snippet unless the user overrides a style option (naming convention, comment
 verbosity, language). See [`IR_SPEC.md`](IR_SPEC.md) for the underlying IR and
@@ -40,6 +33,12 @@ this guide implements.
   or Verilog reserved word *after* style transformation (naming prefix/suffix
   applied) — checked against both languages' keyword sets regardless of
   target, since either may be rendered from the same IR (IR_SPEC §6 rule 7).
+- **Enum members (FSM states):** rendered exactly as declared in the IR,
+  `lower_snake_case` (e.g. `idle`, `run`, `done`, or `s0`..`s4` for an
+  auto-generated state list) — see golden `fsm/defaults.sv`. Any
+  `S_IDLE`-style `UPPER_SNAKE_CASE` state name seen elsewhere (e.g.
+  [`IR_SPEC.md`](IR_SPEC.md) §7's rendering table) is illustrative shorthand
+  for the `EnumDecl`/`localparam` row, not a naming-convention override.
 
 ## 2. The Four Reset Idioms
 
@@ -191,26 +190,31 @@ clocked body statements directly inside the `always_ff` / `always` block.
   that contains a `Case` assigns a default value to the target(s) *before*
   the case statement (or the `Case.default` arm is mandatory — see IR_SPEC §6
   rule 5), so there is no latch inference and no missing-arm hazard. Example
-  (demux-style skeleton, `default` required or full enum coverage):
+  (verbatim from golden `demux/defaults.sv`; case labels are the selector
+  width composed as a replication/concat per §6's unsized-const rule, not a
+  sized-literal shorthand like `2'd0`):
 
   ```systemverilog
   always_comb begin
-      out0 = '0;
-      out1 = '0;
-      out2 = '0;
-      out3 = '0;
+      out0 = {WIDTH{1'b0}};
+      out1 = {WIDTH{1'b0}};
+      out2 = {WIDTH{1'b0}};
+      out3 = {WIDTH{1'b0}};
       case (sel)
-          2'd0: out0 = data_in;
-          2'd1: out1 = data_in;
-          2'd2: out2 = data_in;
-          2'd3: out3 = data_in;
+          {SEL_WIDTH{1'b0}}: out0 = din;
+          {{(SEL_WIDTH-1){1'b0}}, 1'b1}: out1 = din;
+          {{(SEL_WIDTH-2){1'b0}}, 2'b10}: out2 = din;
+          {{(SEL_WIDTH-2){1'b0}}, 2'b11}: out3 = din;
           default: ;
       endcase
   end
   ```
-- **`unique case`:** when `Case.unique = True`, SV emits `unique case`;
-  Verilog has no equivalent, so it emits plain `case` plus a `Comment`
-  documenting the intent (IR_SPEC §3.2).
+- **`unique case`:** when `Case.unique = True`, SV emits `unique case`
+  (verified in every `fsm/*.sv` golden). Verilog has no equivalent and emits
+  plain `case`; a `// unique case intent: labels are mutually exclusive`
+  comment is added *only* when `comment_verbosity = verbose` — at `normal`
+  (the default) and `none`, the Verilog `case` carries no such comment (see
+  `fsm/defaults.v`, which has no intent comment at the default verbosity).
 - **No latches, ever.** Combinational output ports and internal signals are
   always fully assigned in every path; this is enforced by the
   default-assignment-first pattern above and checked by the Verilator
@@ -221,18 +225,22 @@ clocked body statements directly inside the `always_ff` / `always` block.
 Ports use ANSI-style declarations inside the module header (both SV and
 Verilog-2001; IR_SPEC §7). Direction, type, and name are column-aligned so
 the port list reads as a table; inline `//` comments (from `Port.doc`) are
-also aligned. This is the canonical example from IR_SPEC §9:
+also aligned. This is the `counter` snippet's module header, verbatim from
+golden `counter/reset_async_active_low.sv` (async reset, active-low):
 
 ```systemverilog
 module counter #(
     parameter int unsigned WIDTH = 8
 ) (
-    input  logic             clk,
+    input  logic             clk,     // Clock
     input  logic             rst_n,   // Async reset, active-low
-    input  logic             en,      // Count enable
-    output logic [WIDTH-1:0] count
+    input  logic             en,      // Count enable (holds when low)
+    output logic [WIDTH-1:0] count    // Current count value
 );
 ```
+
+Every port that has a `Port.doc` gets an aligned trailing comment — including
+`clk`, which is easy to assume is undocumented but is not, in this snippet.
 
 Notes:
 
@@ -286,6 +294,29 @@ Notes:
 - Blank line separates the module header (ports/parameters) from the first
   body item, and separates top-level items (each `always_ff`/`always_comb`/
   `assign` block) from one another.
+- **Unsized-constant rendering depends on expression context** (two contexts,
+  `render/base.py` module docstring):
+  - **Data context** (the default — right-hand sides of assignments, case
+    labels, operands in expressions): an unsized `Const` renders as a
+    **minimal-width binary literal**, e.g. `Const(1)` → `1'b1`,
+    `Const(0)` → `1'b0` (see every reset idiom in §2:
+    `count <= count + 1'b1;`). A `Const` whose *width* is itself a
+    non-literal expression (e.g. a parameter) composes a **replication**
+    instead: `Const(0, width=Ref("WIDTH"))` → `{WIDTH{1'b0}}` (the reset
+    value in every clocked snippet's reset branch), and a non-zero value
+    with a parameterized width composes a concatenation of a replicated
+    pad plus a sized literal for the low bits, e.g.
+    `{{(WIDTH-3){1'b0}}, 3'b101}` (golden `register/reset_value_5.sv`) or
+    `{{(SEL_WIDTH-1){1'b0}}, 1'b1}` (golden `demux/defaults.sv` case
+    labels).
+  - **Size context** (declaration ranges, indexes, slice bounds, replication
+    counts, parameter default values): an unsized `Const` renders as a
+    **plain number**, no width/base prefix — e.g. `parameter int unsigned
+    WIDTH = 8;` (not `8'd8`), and width expressions stay compact arithmetic
+    on the parameter name (`WIDTH-1`, §5). A `Const` that already carries an
+    explicit width/base (e.g. `2'b10` in a case label) renders sized in
+    either context — only *unsized* constants switch representation by
+    context.
 
 ## 7. Comment Conventions
 
@@ -296,27 +327,45 @@ filters them according to the `comment_verbosity` style option:
 | `comment_verbosity` | Emitted comments |
 |---|---|
 | `none` | No `Comment` nodes rendered. Port `doc` inline comments are also suppressed. |
-| `normal` | `Comment(level="normal")` nodes rendered, plus port/parameter `doc` inline comments. This is the default. |
+| `normal` | `Comment(level="normal")` nodes rendered, plus port `doc` inline comments. This is the default. |
 | `verbose` | All comments rendered, including `level="verbose"` nodes (extra rationale, e.g. per-case-arm notes, `unique case` intent notes on Verilog, CDC multi-bit assumption warnings). |
 
 Port documentation (`Port.doc`) always feeds the trailing `//` comment shown
 in §4 at `normal` and `verbose` levels, and is suppressed at `none`.
 
+**Parameter `doc` is not rendered.** `Param` carries a `doc` field in the IR
+(for tooling/documentation use, e.g. a future param-doc surface), but the
+renderer's `_param_decl` (`render/base.py`) never emits it as a comment, at
+any `comment_verbosity` level — parameter declarations in `#( ... )` never
+have a trailing `//` comment in current golden output (see every
+`counter/*.sv`, `demux/*.sv`, `mux/*.sv` golden: `parameter int unsigned
+WIDTH = 8` has no comment, unlike ports on the following lines). Do not
+assume parameter docs appear in generated code.
+
 ## 8. File Header Format
 
 Every generated file begins with a header comment rendered from the IR
 `Header` node (`license`, `config_hash`, `tool_version`, `description` —
-IR_SPEC §3.3). The header carries no timestamp (determinism is a release
-criterion: same config → byte-identical output). Example:
+IR_SPEC §3.3), via `BaseRenderer._emit_banner` (`render/base.py`). The header
+carries no timestamp (determinism is a release criterion: same config →
+byte-identical output). The banner is always exactly five `//` lines —
+version, snippet+hash, description, a bare `//` separator, then the
+(possibly word-wrapped) disclaimer — followed by one blank line before the
+`module` declaration (or the fragment-mode comment block). Verbatim from
+golden `counter/defaults.sv`:
 
 ```systemverilog
 // SemiCraft v0.1.0
-// Snippet: counter (config hash: 3f9a1c8e2b7d)
-// Up counter
+// Snippet: counter (config hash: 559db01d8e5a)
+// Up counter, 8-bit
 //
 // Generated code is provided as-is, without warranty of any kind. Free for
 // commercial and non-commercial use at the user's own risk.
 ```
+
+The config hash and description change per snippet/options (every golden
+file has its own hash), but the five-line shape and the disclaimer wording
+are identical across every generated file, in both languages.
 
 - **Tool name + version:** `SemiCraft v<VERSION>`, from
   `semicraft_core.version.VERSION`.
@@ -338,16 +387,25 @@ renderer code — always imported from the `DISCLAIMER` constant.
 ## 9. Worked Example
 
 The full worked example below is the canonical reference (IR_SPEC §9):
-8-bit up counter, async active-low reset, enable, default width 8.
+8-bit up counter, async active-low reset, enable, default width 8 — verbatim
+from golden `counter/reset_async_active_low.sv`, including the generated-file
+header (§8):
 
 ```systemverilog
+// SemiCraft v0.1.0
+// Snippet: counter (config hash: c75d0b6e7aea)
+// Up counter, 8-bit
+//
+// Generated code is provided as-is, without warranty of any kind. Free for
+// commercial and non-commercial use at the user's own risk.
+
 module counter #(
     parameter int unsigned WIDTH = 8
 ) (
-    input  logic             clk,
+    input  logic             clk,     // Clock
     input  logic             rst_n,   // Async reset, active-low
-    input  logic             en,      // Count enable
-    output logic [WIDTH-1:0] count
+    input  logic             en,      // Count enable (holds when low)
+    output logic [WIDTH-1:0] count    // Current count value
 );
 
     always_ff @(posedge clk or negedge rst_n) begin
@@ -363,8 +421,10 @@ module counter #(
 endmodule
 ```
 
-The Verilog rendering of the same IR differs only per the IR_SPEC §7 table:
-`count` becomes `output reg [WIDTH-1:0] count` (procedurally driven → `reg`,
+The Verilog rendering of the same IR (golden `counter/reset_async_active_low.v`)
+differs only per the IR_SPEC §7 table: `clk`/`rst_n`/`en` become `input wire`,
+`count` becomes `output reg  [WIDTH-1:0] count` (procedurally driven → `reg`,
 IR_SPEC §2 rule 6), the always block becomes
 `always @(posedge clk or negedge rst_n)`, and the parameter becomes
-`parameter WIDTH = 8` (no `int unsigned`).
+`parameter WIDTH = 8` (no `int unsigned`) — the config hash also differs
+(`1108fcd9886d`) since it is computed per rendered-language target.
