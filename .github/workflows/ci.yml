@@ -37,11 +37,10 @@ jobs:
   lint-gate:
     name: golden lint gate (verilator)
     runs-on: ubuntu-latest
-    # This job installs Verilator and runs the golden-file lint regression
-    # (WP-04/WP-08). No golden tests exist yet as of WP-00, so the job is
-    # allowed to fail/no-op without blocking CI. Remove continue-on-error
-    # once WP-04 and WP-08 land.
-    continue-on-error: true
+    # WP-04 lands the lint wrapper + its own test suite (backend/tests/lint),
+    # which is a hard gate below (no continue-on-error). The golden-file lint
+    # regression (WP-08) is landing in parallel and may not have tests yet,
+    # so that step alone keeps continue-on-error until WP-08 confirms green.
     steps:
       - uses: actions/checkout@v4
       - name: Install uv
@@ -54,10 +53,13 @@ jobs:
           sudo apt-get install -y verilator
       - name: Install dependencies
         run: uv sync --group dev
+      - name: Run lint module tests (incl. verilator integration test)
+        run: uv run pytest backend/tests/lint -m ""
       - name: Run golden lint gate
+        continue-on-error: true
         run: |
           if [ -d backend/tests/golden ] && find backend/tests/golden -name 'test_*.py' | grep -q .; then
             uv run pytest backend/tests/golden -k lint
           else
-            echo "No golden lint tests yet (WP-04/WP-08 pending) — skipping."
+            echo "No golden lint tests yet (WP-08 pending) — skipping."
           fi
