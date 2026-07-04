@@ -15,7 +15,7 @@ Updated: 2026-07-04. Keep current — this file is the session-handoff state.
 | WP-04 lint + WP-06 API | DONE (checkpoint b2877a1, pushed) | Wave-5 agents cut by session limit but work survived; API smoke-verified contract-exact (422 loc shape correct) |
 | WP-05 snippets | DONE all 10, committed 2c7b2a7, pushed | 864 tests total. Gap-fill wave fixed two generator crashes (demux Case default, shift-register serial_out_only undeclared q). Golden snapshots regenerated for all snippets |
 | WP-08 golden infra | DONE at b2877a1 | counter+register snapshots committed; --update-golden pytest flag |
-| WP-10 release | after gap-fill + wave 6 (WP-07 API integration check, WP-09 verify) | |
+| WP-10 release | DONE — v0.1.0 tagged | docs/RELEASE_CHECKLIST.md: all 8 PRD §11 MVP criteria PASS; stock frontend AGENTS.md/CLAUDE.md removed |
 
 ## Environment facts
 
@@ -33,12 +33,7 @@ Updated: 2026-07-04. Keep current — this file is the session-handoff state.
   enum type — DataType has no enum-type reference. Legal SV; add typed-signal
   support only if FSM snippet wants it (IR change, needs decision).
 
-- create-next-app scaffolded frontend/AGENTS.md + frontend/CLAUDE.md (stock) —
-  harmless, review/remove at WP-10.
-- Verilator flag check at WP-04: prompt says `--lint-only -Wall --timing`;
-  verify `--timing` behaves on pure-synthesizable code with the CI Verilator
-  version (Ubuntu apt); drop if it errors.
-- WP-06 dispatch MUST pin the 422 envelope to FastAPI's standard
-  `{ detail: [{ loc: ["body","options","<field>"], msg, type }] }` — the
-  frontend's field-error mapping (frontend/lib/api.ts fieldErrorsFrom)
-  assumes it.
+- (resolved at WP-10) stock frontend AGENTS.md/CLAUDE.md removed; --timing
+  not passed to Verilator (decision recorded in lint/verilator.py); 422
+  envelope verified FastAPI-standard against real capture
+  (frontend/tests/fixtures/real-422-counter.json).
