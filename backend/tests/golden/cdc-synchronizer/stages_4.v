@@ -1,0 +1,26 @@
+// SemiCraft v0.1.0
+// Snippet: cdc_synchronizer (config hash: 02b23b69246b)
+// 4-stage single-bit CDC synchronizer
+//
+// Generated code is provided as-is, without warranty of any kind. Free for
+// commercial and non-commercial use at the user's own risk.
+
+module cdc_synchronizer (
+    input  wire clk,       // Destination-domain clock
+    input  wire d_async,   // Asynchronous input, not synchronous to clk (source of the CDC)
+    output reg  q          // Synchronized output, 4 clk cycles behind d_async
+);
+
+    localparam STAGES = 4;
+    reg sync_ff1;  // Synchronizer stage 1
+    reg sync_ff2;  // Synchronizer stage 2
+    reg sync_ff3;  // Synchronizer stage 3
+
+    always @(posedge clk) begin
+        sync_ff1 <= d_async;
+        sync_ff2 <= sync_ff1;
+        sync_ff3 <= sync_ff2;
+        q <= sync_ff3;
+    end
+
+endmodule

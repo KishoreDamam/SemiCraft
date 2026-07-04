@@ -53,6 +53,7 @@ from ..ir.nodes import (
     Ref,
     ResetKind,
     ResetSpec,
+    Signal,
     Slice,
 )
 from ..version import VERSION
@@ -184,6 +185,15 @@ def generate(opts: ShiftRegisterOptions) -> Module:
         )
     ports.append(Port("so", OUT, bit(), doc=_so_doc(opts)))
 
+    # When serial_out_only removes the 'q' port, the register still needs a
+    # declared internal signal to hold its state (IR validation rule 2: every
+    # Ref must resolve to a param, port, or declared Signal).
+    extra_items: list = []
+    if opts.serial_out_only:
+        extra_items.append(
+            Signal("q", vec("DEPTH"), doc="Internal shift-register state (no parallel output port)")
+        )
+
     # --- clocked body ---------------------------------------------------
     # Shift statement always present; load (if enabled) takes priority over it.
     shift_stmt = Assign(Ref("q"), _shift_expr(opts))
@@ -224,7 +234,7 @@ def generate(opts: ShiftRegisterOptions) -> Module:
         ),
         params=[Param("DEPTH", Const(opts.depth), doc="Shift register depth in bits")],
         ports=ports,
-        items=[always, so_assign],
+        items=[*extra_items, always, so_assign],
     )
 
 

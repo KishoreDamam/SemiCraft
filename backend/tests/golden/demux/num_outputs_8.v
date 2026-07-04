@@ -1,0 +1,47 @@
+// SemiCraft v0.1.0
+// Snippet: demux (config hash: 495df3e7a97f)
+// 8-way demultiplexer, 8-bit data
+//
+// Generated code is provided as-is, without warranty of any kind. Free for
+// commercial and non-commercial use at the user's own risk.
+
+module demux #(
+    parameter WIDTH = 8
+) (
+    input  wire [WIDTH-1:0]     din,    // Data input routed to the selected output
+    input  wire [SEL_WIDTH-1:0] sel,    // Output select (3-bit; chooses out0..out7)
+    output reg  [WIDTH-1:0]     out0,   // Demultiplexed output 0; driven by din when sel == 0, else zero
+    output reg  [WIDTH-1:0]     out1,   // Demultiplexed output 1; driven by din when sel == 1, else zero
+    output reg  [WIDTH-1:0]     out2,   // Demultiplexed output 2; driven by din when sel == 2, else zero
+    output reg  [WIDTH-1:0]     out3,   // Demultiplexed output 3; driven by din when sel == 3, else zero
+    output reg  [WIDTH-1:0]     out4,   // Demultiplexed output 4; driven by din when sel == 4, else zero
+    output reg  [WIDTH-1:0]     out5,   // Demultiplexed output 5; driven by din when sel == 5, else zero
+    output reg  [WIDTH-1:0]     out6,   // Demultiplexed output 6; driven by din when sel == 6, else zero
+    output reg  [WIDTH-1:0]     out7    // Demultiplexed output 7; driven by din when sel == 7, else zero
+);
+
+    localparam SEL_WIDTH = 3;
+
+    always @(*) begin
+        out0 = {WIDTH{1'b0}};
+        out1 = {WIDTH{1'b0}};
+        out2 = {WIDTH{1'b0}};
+        out3 = {WIDTH{1'b0}};
+        out4 = {WIDTH{1'b0}};
+        out5 = {WIDTH{1'b0}};
+        out6 = {WIDTH{1'b0}};
+        out7 = {WIDTH{1'b0}};
+        case (sel)
+            {SEL_WIDTH{1'b0}}: out0 = din;
+            {{(SEL_WIDTH-1){1'b0}}, 1'b1}: out1 = din;
+            {{(SEL_WIDTH-2){1'b0}}, 2'b10}: out2 = din;
+            {{(SEL_WIDTH-2){1'b0}}, 2'b11}: out3 = din;
+            {{(SEL_WIDTH-3){1'b0}}, 3'b100}: out4 = din;
+            {{(SEL_WIDTH-3){1'b0}}, 3'b101}: out5 = din;
+            {{(SEL_WIDTH-3){1'b0}}, 3'b110}: out6 = din;
+            {{(SEL_WIDTH-3){1'b0}}, 3'b111}: out7 = din;
+            default: ;
+        endcase
+    end
+
+endmodule

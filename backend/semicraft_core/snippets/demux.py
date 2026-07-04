@@ -16,8 +16,10 @@ Design notes (IMPLEMENTATION_PLAN.md §5 WP-05 row "demux"):
 - All outputs are assigned zero *first* in the ``AlwaysComb`` body (no
   latches, IR_SPEC design rule / WP-02 validation), then a ``Case`` on ``sel``
   overwrites the selected output with ``din``. Unmapped ``sel`` values (when
-  ``num_outputs`` is not a power of two) simply leave every output at its
-  already-assigned zero default — no default arm is needed on the ``Case``.
+  ``num_outputs`` is not a power of two) leave every output at its
+  already-assigned zero default. IR validation rule 5 requires every
+  non-enum ``Case`` to declare a ``default`` arm regardless, so an empty
+  (no-op) default is attached explicitly.
 """
 
 from __future__ import annotations
@@ -137,9 +139,10 @@ def generate(opts: DemuxOptions) -> Module:
         body.append(Assign(Ref(_output_name(i)), zero))
 
     # Case routes din to the selected output. Unmapped sel values (possible
-    # when num_outputs is not a power of two) fall through with no matching
-    # arm, so every output keeps its zero default above -- no default arm
-    # needed on the Case itself.
+    # when num_outputs is not a power of two) are handled by an explicit
+    # (no-op) default arm -- IR validation rule 5 requires every non-enum
+    # Case to have a default, even though every output already carries its
+    # zero default from the assignments above.
     items = [
         CaseItem(
             labels=[Const(i, width=Ref("SEL_WIDTH"))],
@@ -147,7 +150,7 @@ def generate(opts: DemuxOptions) -> Module:
         )
         for i in range(opts.num_outputs)
     ]
-    body.append(Case(sel=Ref("sel"), items=items))
+    body.append(Case(sel=Ref("sel"), items=items, default=[]))
 
     always = AlwaysComb(body=body)
 
