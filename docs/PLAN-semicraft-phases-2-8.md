@@ -256,3 +256,61 @@ output). MVP-era principle stands: AI never becomes the source of truth.
 - Escalation rule stands: sonnet stuck twice → re-dispatch opus.
 - Each phase ends by updating PROGRESS.md, RELEASE_CHECKLIST-style gate vs the
   PRD §11 post-MVP criteria, tag, push.
+
+---
+
+## Appendix A — P2 Frozen Contracts (P2-01 decisions, 2026-07-06)
+
+### A.1 API v2 (multi-file)
+
+```
+GET /api/v2/catalog
+  → { "items": [ { id, name, description, kind, maturity,
+                   json_schema, defaults } ] }
+  kind: "snippet"|"module" (later: ip|subsystem|app); maturity: "stable"|"beta".
+  /api/v1/snippets remains, serving kind=="snippet" only (backcompat).
+
+POST /api/v2/generate
+  { "item_id": str, "options": {...} }
+  → { "files": [ { "path": str, "kind": "rtl"|"tb"|"doc", "text": str } ],
+      "explanation": ExplanationDoc,
+      "lint": [ { "path": str, "status": ..., "messages": [...] } ],   # rtl files only
+      "config_hash": str, "language": "sv"|"verilog" }
+  Errors identical to v1 (404 / 422 FastAPI envelope / 500).
+
+POST /api/v2/generate/zip   — same body → application/zip of files[],
+  zip entries in files[] order, fixed timestamps (determinism).
+```
+
+Backend: `GenerateResult` gains `files: list[GeneratedFile(path, kind, text)]`;
+v1 endpoints adapt snippets by wrapping the single file. Snippets are served
+by v2 too (files == one rtl entry).
+
+### A.2 Catalog taxonomy
+
+`SnippetDef` grows `kind: str = "snippet"` and `maturity: str = "stable"`
+(contract.py defaults — zero changes to existing snippet files). `ModuleDef`
+sets `kind = "module"`.
+
+### A.3 ModuleDef contract (implemented by P2-04)
+
+```python
+class ModuleDef:                      # structural, like SnippetDef
+    id, name, description             # as SnippetDef
+    kind = "module"; maturity
+    options_model: type[BaseModel]
+    def generate(opts) -> Module                   # rtl IR, as snippets
+    def explain(opts) -> ExplanationDoc
+    def port_groups(opts) -> list[PortGroup]       # doc metadata (name, ports)
+    def tb_spec(opts) -> TbSpec                    # smoke-TB recipe
+class TbSpec(BaseModel):
+    clock: str | None; reset: str | None; reset_cycles: int = 2
+    vectors: list[dict[str, int]]      # per-cycle input assignments
+    checks: list[Check]                # cycle, signal, expected value
+```
+
+`generate_files(module_def, opts)` (entry-point layer, not per-module code)
+assembles: rtl file (existing pipeline) + tb file (P2-13 generator consumes
+TbSpec; until P2-13 lands, tb emission is feature-flagged off) + doc file
+(md from ExplanationDoc + port_groups). Header stamping stays owned by the
+entry point.

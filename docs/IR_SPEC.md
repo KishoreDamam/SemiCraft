@@ -1,6 +1,13 @@
 # SemiCraft Module IR Specification
 
-Version 0.1 (MVP scope). Owner: generator core (`semicraft_core/ir/`).
+Version 0.2 (Phase 2). Owner: generator core (`semicraft_core/ir/`).
+
+## Changelog
+
+- **v0.2 (P2-01):** adds `GenFor`, `Memory`, `DataType.enum_type` (§10).
+  `Function` deferred to Phase 3 (no P2 module needs it; clog2-style values
+  are computed in Python and emitted as localparams).
+- **v0.1:** MVP node set (§3), shipped in v0.1.0.
 
 ## 1. Purpose and Scope
 
@@ -256,3 +263,70 @@ endmodule
 Verilog rendering differs only per the §7 table (`reg [WIDTH-1:0] count` as
 an output reg, `always @(posedge clk or negedge rst_n)`, `parameter WIDTH = 8`).
 Same IR, both languages, all four reset variants from one generator.
+
+## 10. IR v0.2 Additions (Phase 2 — normative)
+
+Design rules of §2 apply unchanged. New validation rules are numbered 8–11
+and join `ir.validate`.
+
+### 10.1 `GenFor` — generate-for loop (module item)
+
+| Field | Type | Notes |
+|---|---|---|
+| `label` | `str` | Required; canonical identifier; rendered as the generate block label, styled `gen_<label>` if not already prefixed. |
+| `genvar` | `str` | Loop variable; referencable as `Ref(genvar)` inside `items` expressions only. |
+| `count` | `Expr` | Iterates `[0, count)`; constant or param-derived. |
+| `items` | list | Allowed members: `ContAssign`, `Instance`, `AlwaysFF`, `AlwaysComb`, `Comment`. No nested `GenFor` in v0.2, no `Signal` declarations inside (declare full-width outside, select with the genvar). |
+
+Rendering: SV `generate for (genvar i = 0; i < N; i++) begin : gen_label ...`;
+Verilog-2001 `genvar i; generate for (...) begin : gen_label ...` — genvar
+declared before the generate block.
+
+**Rule 8:** `genvar` must not shadow any declared name; `Ref(genvar)` resolves
+only within that `GenFor`'s items; `label` unique among generate labels.
+
+### 10.2 `Memory` — unpacked array (module item)
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` | `str` | Canonical identifier, shares the signal namespace. |
+| `width` | `Expr` | Element width. |
+| `depth` | `Expr` | Element count. |
+| `doc` | `str` | Optional. |
+
+Access: element select only — `Bit(target=Ref(mem), index=expr)` in
+procedural `Assign` lhs/rhs (renders `mem[addr]`). Whole-array references,
+slices of the array dimension, and continuous assignment to memory elements
+are invalid in v0.2.
+
+Rendering: SV `logic [W-1:0] mem [DEPTH];` Verilog `reg [W-1:0] mem [0:DEPTH-1];`
+
+**Rule 9:** a `Memory` is only referenced via element select; written only
+inside `AlwaysFF` (synchronous write; enforces synthesizable RAM inference);
+reads may appear in `AlwaysFF` (sync read) or `AlwaysComb`/`ContAssign` rhs
+(async read — renderer note: async-read memories infer distributed RAM on
+FPGA; generators must document the choice in explanations).
+
+### 10.3 `DataType.enum_type` — typed enum signals
+
+`DataType` gains optional `enum_type: str | None` (default `None`) naming an
+`EnumDecl` in the same module. When set, `width` must be `None` (width comes
+from the enum layout).
+
+Rendering: SV declares the signal/port with the typedef name
+(`state_t state`); Verilog ignores `enum_type` and declares a plain vector of
+the enum's layout width (unchanged v0.1 behavior). This closes the Phase-1
+deferred typed-state-signal gap; the FSM snippet may adopt it in a later
+minor release (golden-visible change — bump goldens deliberately).
+
+**Rule 10:** `enum_type` resolves to a declared `EnumDecl`; `width` unset.
+
+**Rule 11 (namespace):** `Memory` names and `GenFor` labels join the rule-1
+duplicate check.
+
+### 10.4 Explicitly still out of scope in v0.2
+
+Functions/tasks (Phase 3, TB family), nested generate, generate-if, unpacked
+structs, SV interfaces (Phase 4 uses flat ports + bundle metadata), initial
+blocks (TB node family only, Phase 3 — a P2 smoke-TB stub family `tb.Initial`
++ `tb.Delay` lives OUTSIDE this spec in `docs/TB_SPEC.md` when it lands).
