@@ -63,7 +63,7 @@ testbenches. PRD exit: "generated modules have basic validation coverage."
 |---|---|---|---|---|
 | P2-01 | Cross-cutting decisions: API v2 files contract, catalog taxonomy, IR v0.2 spec deltas written into IR_SPEC (GenFor, Memory, EnumType-on-DataType, Function, changelog) | M | opus | — |
 | P2-02 | IR v0.2 implementation + validation rules for new nodes | M | opus | P2-01 |
-| P2-03 | Renderer support for new nodes both languages (generate blocks, memory decls, typed enum signals) | L | fable | P2-02 |
+| P2-03 | Renderer support for new nodes both languages (generate blocks, memory decls, typed enum signals) | L | opus | P2-02 |
 | P2-04 | Module contract: `ModuleDef` extends snippet contract with multi-file output, port-group metadata, per-module smoke-TB hook | M | opus | P2-01 |
 | P2-05 | API v2 + zip download + frontend file tabs (backend sonnet + frontend opus split into P2-05a/b) | M/L | sonnet+opus | P2-04 |
 | P2-06..12 | Module set, one WP each: edge detector; debouncer; clock divider; PWM generator; round-robin arbiter; LFSR; gray-code counter | S–M each | sonnet (arbiter: opus) | P2-04, P2-03 |
@@ -74,8 +74,8 @@ testbenches. PRD exit: "generated modules have basic validation coverage."
 - [ ] Exit: 7 modules × both languages, each with smoke TB compiling under Verilator in CI, golden-locked, catalog-filterable, zip-downloadable.
 
 Key risks: renderer complexity jump (generate blocks interact with naming/style
-engine — P2-03 is fable for the same reason WP-02 was); TB determinism (no
-timestamps, fixed seeds).
+engine — P2-03 carries the same poison-downstream risk WP-02 did; give it an
+extra review pass); TB determinism (no timestamps, fixed seeds).
 
 ---
 
@@ -89,8 +89,8 @@ testbenches run against at least one supported module family."
 
 | WP | Scope | Size | Model | Depends |
 |---|---|---|---|---|
-| P3-01 | TB IR node family full spec + implementation (Initial, Delay, ClockGen, ResetSeq, Fork, Finish, Display, AssertProperty stub) + tb validator (rejects synthesizable-only nodes misuse and vice versa) | L | fable | — |
-| P3-02 | TB renderers (SV-first; Verilog TB subset) + sim-script emitter (Makefile + run.sh for Verilator, Icarus fallback) | L | fable | P3-01 |
+| P3-01 | TB IR node family full spec + implementation (Initial, Delay, ClockGen, ResetSeq, Fork, Finish, Display, AssertProperty stub) + tb validator (rejects synthesizable-only nodes misuse and vice versa) | L | opus | — |
+| P3-02 | TB renderers (SV-first; Verilog TB subset) + sim-script emitter (Makefile + run.sh for Verilator, Icarus fallback) | L | opus | P3-01 |
 | P3-03 | Sim sandbox service (cross-cutting decision 3): container runner, API `/api/v2/simulate`, queue + timeout + artifact capture; frontend "Run smoke sim" button with log viewer | L | opus | P3-02 |
 | P3-04 | Directed-TB generator upgrade: stimulus tables from module metadata (per-port constraints), self-checking expected-value hooks | L | opus | P3-02 |
 | P3-05 | SVA assertion template generator: reset behavior, handshake (valid/ready), stability, onehot-state assertions bound to FSM/module metadata | M | opus | P3-01 |
@@ -117,7 +117,7 @@ interrupt controller.
 | WP | Scope | Size | Model | Depends |
 |---|---|---|---|---|
 | P4-01 | IP contract: `IpDef` = ModuleDef + register-map metadata + interface declarations (bus-side port bundles) + doc template + verification scaffold hook; interface abstraction (named port bundles — NOT SV interfaces yet, flat ports with bundle metadata) | M | opus | P3 done |
-| P4-02 | Register-map model (fields, access types RW/RO/W1C, address calc) + AXI-Lite register block generator — the keystone IP others reuse | L | fable | P4-01 |
+| P4-02 | Register-map model (fields, access types RW/RO/W1C, address calc) + AXI-Lite register block generator — the keystone IP others reuse | L | opus | P4-01 |
 | P4-03 | Sync FIFO (+ async FIFO with gray-pointer CDC, reusing cdc discipline) | M | opus | P4-01 |
 | P4-04 | RAM/ROM (single/dual port, init file support via Memory node) | M | sonnet | P4-01 |
 | P4-05 | UART (tx/rx, param baud, AXI-Lite regblock frontend) | L | opus | P4-02 |
@@ -132,7 +132,7 @@ interrupt controller.
 
 Key risks: protocol correctness (UART/SPI/I2C — opus + agkit skills +
 protocol checklists; sim-verified in CI is the safety net); async FIFO CDC
-(fable-level review pass on P4-03 output).
+(dedicated review pass on P4-03 output).
 
 ---
 
@@ -146,7 +146,7 @@ map, interconnect glue, top wrapper, subsystem TB + docs. PRD exit:
 
 | WP | Scope | Size | Model | Depends |
 |---|---|---|---|---|
-| P5-01 | Subsystem contract: `SubsystemDef` = composition model (instances of IpDefs + params), address-map allocator (auto + manual override, overlap validation), clock/reset domain declaration | L | fable | P4 done |
+| P5-01 | Subsystem contract: `SubsystemDef` = composition model (instances of IpDefs + params), address-map allocator (auto + manual override, overlap validation), clock/reset domain declaration | L | opus | P4 done |
 | P5-02 | Interconnect generator: AXI-Lite 1-to-N decoder/mux glue from address map | L | opus | P5-01 |
 | P5-03 | Top-level wrapper emission: instance wiring, port promotion rules, filelist (.f) + dependency-ordered file emission | M | opus | P5-01 |
 | P5-04 | Canned subsystems: UART+timer+GPIO peripheral subsystem; SPI+I2C comms subsystem; memory-mapped control subsystem | M each ×3 | sonnet | P5-02,03 |
@@ -170,7 +170,7 @@ Goal: user-provided/third-party IP into generated subsystems. PRD exit:
 |---|---|---|---|---|
 | P6-01 | External-IP metadata schema (the IP-XACT-aligned JSON subset locked in PRD §15): ports, params, interfaces, clocks/resets, files. Importer + validator + STRICT review report | L | opus | P5 done |
 | P6-02 | Verilog/SV port-list extractor (parse module header only — slang or verible as parser dependency, decision WP) to bootstrap metadata from user RTL; user confirms/edits — never silently trusted | L | opus | P6-01 |
-| P6-03 | Mapping engine: external interface ↔ SemiCraft bundle mapping, width/polarity adapters, clock/reset domain declaration | L | fable | P6-01 |
+| P6-03 | Mapping engine: external interface ↔ SemiCraft bundle mapping, width/polarity adapters, clock/reset domain declaration | L | opus | P6-01 |
 | P6-04 | Wrapper + glue generation, filelist merge, integration checklist doc (every assumption listed for human signoff) | M | opus | P6-03 |
 | P6-05 | Subsystem integration: external IP as instance in P5 composer, address-map slot for mapped regblocks | M | opus | P6-04 |
 | P6-06 | Sim scaffold with user IP as black box (compile-only gate; user code NEVER runs in shared sandbox — document threat model; optional local-run scripts instead) | M | sonnet | P6-04 |
@@ -248,9 +248,11 @@ output). MVP-era principle stands: AI never becomes the source of truth.
 
 - One phase active at a time; inside a phase, waves like Phase 1 (contract WP
   first, then parallel fan-out, then integration/release WP).
-- Model tiering rationale unchanged: fable only where errors poison everything
-  downstream (P2-03, P3-01/02, P4-02, P5-01, P6-03); opus for contracts,
-  protocol IPs, and judgment; sonnet for pattern work against references.
+- Model tiering: two tiers only — opus for contracts, IR/renderer work,
+  protocol IPs, and anything whose errors poison downstream WPs (P2-03,
+  P3-01/02, P4-02, P5-01, P6-03 get an extra review pass in lieu of a higher
+  tier); sonnet for pattern work against references. Fable is NOT used for
+  any WP (user decision).
 - Escalation rule stands: sonnet stuck twice → re-dispatch opus.
 - Each phase ends by updating PROGRESS.md, RELEASE_CHECKLIST-style gate vs the
   PRD §11 post-MVP criteria, tag, push.
