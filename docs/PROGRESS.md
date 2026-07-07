@@ -45,6 +45,7 @@ Updated: 2026-07-04. Keep current — this file is the session-handoff state.
 | P2-01 decisions | DONE, committed 745b89e, pushed | IR_SPEC §10 (GenFor/Memory/enum_type, rules 8-11); plan Appendix A (API v2, taxonomy, ModuleDef/TbSpec) |
 | P2-02 IR v0.2 | DONE, committed, pushed | 34 tests; rules 8-11; genvar cross-loop reuse forbidden |
 | P2-04 ModuleDef | DONE, committed e1c0f68, pushed | 55 tests + 23 goldens; registry-side kind/maturity defaulting; generate_files() rtl+doc; edge-detector reference module; 999 total green |
-| P2-03 renderers | IN FLIGHT (opus, background) | owns render/ + tests/render/test_v02_render.py. Recovery: verify uncommitted render/ work (999 existing tests must stay green, counter goldens byte-stable), commit "P2-03: ..."; if absent re-dispatch per plan |
-| P2-05a API v2 backend | IN FLIGHT (sonnet, background) | owns api/main.py + tests/api/test_v2.py. Recovery: verify v1 byte-compat + zip determinism, commit "P2-05a: ..." |
+| P2-03 renderers | DONE, committed a4c528d, pushed | 25 golden tests; explicit generate/endgenerate both languages; fixed 2 latent GenFor-scope bugs (reset naming, reg/wire inference) |
+| P2-05a API v2 backend | DONE, committed e45f455, pushed | 14 tests; catalog+generate+deterministic zip; v1 regression-guarded |
+| NEXT | P2-05b frontend file tabs (opus) + first modules P2-06.. (sonnet) | 2-agent budget per session |
 | P2-05..15 | queued per plan | 2-agent budget per session (user constraint) |
