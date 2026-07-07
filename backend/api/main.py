@@ -1,14 +1,19 @@
-"""SemiCraft HTTP API (WP-06, IMPLEMENTATION_PLAN.md §4 — frozen contract).
+"""SemiCraft HTTP API (WP-06, IMPLEMENTATION_PLAN.md §4 — frozen contract;
+Phase-2 Appendix A.1 — API v2 multi-file contract, P2-05a).
 
 Implements:
 
 - ``GET  /healthz``           — liveness check (kept from the WP-00 placeholder).
-- ``GET  /api/v1/snippets``   — catalog built from the snippet registry.
+- ``GET  /api/v1/snippets``   — catalog built from the snippet registry
+  (``kind == "snippet"`` only — backcompat, byte-identical to pre-Phase-2).
 - ``POST /api/v1/generate``  — validate options, generate code, lint, respond.
+- ``GET  /api/v2/catalog``          — full catalog (snippets + modules).
+- ``POST /api/v2/generate``         — multi-file generation (Appendix A.1).
+- ``POST /api/v2/generate/zip``     — same body, zip download.
 
-Error mapping (§4):
+Error mapping (§4, unchanged in v2):
 
-- unknown ``snippet_id``  -> :class:`UnknownSnippetError` -> HTTP 404.
+- unknown ``snippet_id``/``item_id``  -> :class:`UnknownSnippetError` -> 404.
 - invalid ``options``     -> ``pydantic.ValidationError`` -> HTTP 422, in
   FastAPI's standard ``{"detail": [...]}`` envelope with ``loc`` prefixed by
   ``["body", "options"]`` so the frontend's ``fieldErrorsFrom()`` (lib/api.ts)
@@ -23,14 +28,17 @@ the endpoint still responds, with ``{"status": "unavailable", "messages": []}``.
 
 from __future__ import annotations
 
+import io
 import logging
+import zipfile
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ValidationError
 from semicraft_core.generate import generate as core_generate
+from semicraft_core.generate import generate_files as core_generate_files
 from semicraft_core.ir.validate import IRValidationError
 from semicraft_core.snippets import registry
 
@@ -89,7 +97,7 @@ def healthz() -> dict[str, str]:
 @app.get("/api/v1/snippets")
 def list_snippets() -> dict:
     snippets = []
-    for snippet in registry.all():
+    for snippet in registry.by_kind("snippet"):
         defaults_model = snippet.options_model()
         snippets.append(
             {
@@ -101,6 +109,34 @@ def list_snippets() -> dict:
             }
         )
     return {"snippets": snippets}
+
+
+# --- GET /api/v2/catalog ------------------------------------------------------
+
+
+@app.get("/api/v2/catalog")
+def list_catalog() -> dict:
+    """Full catalog (snippets + modules), Appendix A.1.
+
+    Uses ``registry.all()`` (all kinds) rather than the v1 helper's
+    snippet-only filter — the whole point of v2 is one catalog covering every
+    registered ``kind``.
+    """
+    items = []
+    for item in registry.all():
+        defaults_model = item.options_model()
+        items.append(
+            {
+                "id": item.id,
+                "name": item.name,
+                "description": item.description,
+                "kind": registry.item_kind(item),
+                "maturity": registry.item_maturity(item),
+                "json_schema": item.options_model.model_json_schema(),
+                "defaults": defaults_model.model_dump(mode="json"),
+            }
+        )
+    return {"items": items}
 
 
 # --- POST /api/v1/generate ---------------------------------------------------
@@ -193,6 +229,97 @@ def generate(body: GenerateRequest) -> dict:
         "lint": _lint_report(lint_code, lint_language),
         "config_hash": result.config_hash,
     }
+
+
+# --- POST /api/v2/generate & /api/v2/generate/zip ----------------------------
+
+
+class GenerateV2Request(BaseModel):
+    item_id: str
+    options: dict = {}
+
+
+def _generate_files_or_error(item_id: str, options: dict):
+    """Shared body for the v2 generate/zip endpoints.
+
+    Returns either a ``GenerateFilesResult`` or a :class:`JSONResponse` holding
+    the appropriate error envelope (404 / 422 / 500) — callers check which by
+    type before proceeding.
+    """
+    try:
+        return core_generate_files(item_id, options)
+    except registry.UnknownSnippetError as exc:
+        return JSONResponse(status_code=404, content={"detail": str(exc)})
+    except ValidationError as exc:
+        errors = []
+        for err in exc.errors():
+            loc = ["body", "options", *err["loc"]]
+            errors.append({"loc": loc, "msg": err["msg"], "type": err["type"]})
+        return JSONResponse(status_code=422, content={"detail": errors})
+    except IRValidationError:
+        logger.exception("IR validation failed for item_id=%s (generator bug)", item_id)
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal error generating code."},
+        )
+
+
+def _v2_response_payload(result) -> dict:
+    """Build the JSON body for ``POST /api/v2/generate`` (Appendix A.1)."""
+    explanation = result.explanation
+    explanation_payload = (
+        explanation.model_dump(mode="json") if isinstance(explanation, BaseModel) else explanation
+    )
+
+    lint_reports = []
+    for f in result.files:
+        if f.kind != "rtl":
+            continue
+        lint_reports.append({"path": f.path, **_lint_report(f.text, result.language)})
+
+    return {
+        "files": [{"path": f.path, "kind": f.kind, "text": f.text} for f in result.files],
+        "explanation": explanation_payload,
+        "lint": lint_reports,
+        "config_hash": result.config_hash,
+        "language": result.language,
+    }
+
+
+@app.post("/api/v2/generate")
+def generate_v2(body: GenerateV2Request) -> dict:
+    result = _generate_files_or_error(body.item_id, body.options)
+    if isinstance(result, JSONResponse):
+        return result
+    return _v2_response_payload(result)
+
+
+# Fixed zip entry timestamp (1980-01-01, the DOS epoch and zipfile's floor) so
+# that two identical requests produce byte-identical zip bytes (ground rule
+# §1: determinism) — real wall-clock timestamps would break that guarantee.
+_FIXED_ZIP_DATE_TIME = (1980, 1, 1, 0, 0, 0)
+
+
+@app.post("/api/v2/generate/zip")
+def generate_v2_zip(body: GenerateV2Request):
+    result = _generate_files_or_error(body.item_id, body.options)
+    if isinstance(result, JSONResponse):
+        return result
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for f in result.files:
+            info = zipfile.ZipInfo(filename=f.path, date_time=_FIXED_ZIP_DATE_TIME)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            zf.writestr(info, f.text)
+
+    zip_bytes = buffer.getvalue()
+    filename = f"semicraft_{body.item_id}_{result.config_hash}.zip"
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # Ensure our own request-body model surfaces the same envelope shape as the
