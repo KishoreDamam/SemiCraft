@@ -8,13 +8,14 @@ structural is inherited from :class:`~semicraft_core.render.base.BaseRenderer`.
 
 from __future__ import annotations
 
-from ..ir.nodes import EnumDecl, Port, Signal
+from ..ir.nodes import EnumDecl, Expr, Port, Signal
 from .base import BaseRenderer, enum_layout
 
 
 class SVRenderer(BaseRenderer):
     language = "sv"
     supports_unique_case = True
+    enum_typedef_declaration = True
 
     def always_ff_open(self, sensitivity: str) -> str:
         return f"always_ff @({sensitivity}) begin"
@@ -33,6 +34,23 @@ class SVRenderer(BaseRenderer):
 
     def signal_kind(self, sig: Signal) -> str:
         return "logic"
+
+    def memory_kind(self) -> str:
+        return "logic"
+
+    def memory_array_dim(self, depth: Expr) -> str:
+        # SV unpacked array: element count only, ``[DEPTH]`` (IR_SPEC §10.2).
+        return f"[{self._cexpr(depth)}]"
+
+    def genvar_init(self, genvar: str) -> str:
+        return f"genvar {genvar} = 0;"
+
+    def genvar_incr(self, genvar: str) -> str:
+        return f"{genvar}++"
+
+    def _emit_genvar_predecl(self, genvar: str) -> None:
+        # SV declares the genvar inline in the loop header — no predeclaration.
+        return
 
     def _emit_enum_decl(self, decl: EnumDecl) -> None:
         width, values = enum_layout(decl)

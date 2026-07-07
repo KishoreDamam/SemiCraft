@@ -18,7 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from ..ir.nodes import AlwaysFF, EnumDecl, Instance, Module, Signal
+from ..ir.nodes import AlwaysFF, EnumDecl, GenFor, Instance, Memory, Module, Signal
 from ..ir.validate import SV_KEYWORDS, VERILOG_KEYWORDS
 
 NamingConvention = Literal["snake", "camel"]
@@ -64,10 +64,22 @@ def build_name_map(module: Module, style: StyleOptions) -> dict[str, str]:
     active_low=True``) get a terminal ``_n`` suffix so the rendered reset name
     and every reference to it agree (design rule 5).
     """
+    # Active-low resets get an ``_n`` suffix. Descend into GenFor items so a
+    # reset declared on an AlwaysFF *inside* a generate loop still gets suffixed
+    # (its ``!rst_n`` condition and the port name must agree — design rule 5).
+    def _all_ffs():
+        for item in module.items:
+            if isinstance(item, AlwaysFF):
+                yield item
+            elif isinstance(item, GenFor):
+                for inner in item.items:
+                    if isinstance(inner, AlwaysFF):
+                        yield inner
+
     active_low_resets = {
-        item.reset.name
-        for item in module.items
-        if isinstance(item, AlwaysFF) and item.reset is not None and item.reset.active_low
+        ff.reset.name
+        for ff in _all_ffs()
+        if ff.reset is not None and ff.reset.active_low
     }
 
     def transform(name: str) -> str:
@@ -77,11 +89,23 @@ def build_name_map(module: Module, style: StyleOptions) -> dict[str, str]:
             rendered += "_n"
         return rendered
 
+    def _map_ff(mapping: dict[str, str], ff: AlwaysFF) -> None:
+        # Clock/reset names normally alias ports (already mapped); the
+        # setdefault covers specs whose names are not declared ports so the
+        # composed sensitivity list still gets styled names (and ``_n``).
+        mapping.setdefault(ff.clock.name, transform(ff.clock.name))
+        if ff.reset is not None:
+            mapping.setdefault(ff.reset.name, transform(ff.reset.name))
+
     mapping: dict[str, str] = {}
     for port in module.ports:
         mapping[port.name] = transform(port.name)
     for item in module.items:
         if isinstance(item, Signal):
+            mapping[item.name] = transform(item.name)
+        elif isinstance(item, Memory):
+            # Memory shares the signal namespace (IR_SPEC §10.2); its name flows
+            # through the same style transform as signals.
             mapping[item.name] = transform(item.name)
         elif isinstance(item, EnumDecl):
             mapping[item.name] = transform(item.name)
@@ -89,13 +113,22 @@ def build_name_map(module: Module, style: StyleOptions) -> dict[str, str]:
                 mapping[member] = transform(member)
         elif isinstance(item, Instance):
             mapping[item.name] = transform(item.name)
+        elif isinstance(item, GenFor):
+            # GenFor label: styled ``gen_<label>`` if not already prefixed
+            # (IR_SPEC §10.1), then run through the naming convention/affixes
+            # like any other identifier. The genvar is a plain identifier.
+            base_label = item.label if item.label.startswith("gen_") else f"gen_{item.label}"
+            mapping[item.label] = transform(base_label)
+            mapping[item.genvar] = transform(item.genvar)
+            # Inner AlwaysFF clock/reset specs must also be styled so the
+            # composed sensitivity list inside the generate block matches.
+            for inner in item.items:
+                if isinstance(inner, AlwaysFF):
+                    _map_ff(mapping, inner)
+                elif isinstance(inner, Instance):
+                    mapping.setdefault(inner.name, transform(inner.name))
         elif isinstance(item, AlwaysFF):
-            # Clock/reset names normally alias ports (already mapped); the
-            # setdefault covers specs whose names are not declared ports so the
-            # composed sensitivity list still gets styled names (and ``_n``).
-            mapping.setdefault(item.clock.name, transform(item.clock.name))
-            if item.reset is not None:
-                mapping.setdefault(item.reset.name, transform(item.reset.name))
+            _map_ff(mapping, item)
     # Params and the module name render verbatim; include them so collision
     # checks see the full rendered namespace.
     for param in module.params:

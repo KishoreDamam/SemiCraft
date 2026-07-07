@@ -52,12 +52,15 @@ from ..ir.nodes import (
     Const,
     ConstBase,
     ContAssign,
+    DataType,
     EnumDecl,
     EnumEncoding,
     EnumRef,
     Expr,
+    GenFor,
     If,
     Instance,
+    Memory,
     Module,
     Param,
     Port,
@@ -111,17 +114,28 @@ def _lvalue_names(lhs: Expr) -> Iterator[str]:
 
 
 def procedural_targets(module: Module) -> frozenset[str]:
-    """Names assigned inside any procedural block (reg/wire inference, rule 6)."""
-    driven: set[str] = set()
-    for item in module.items:
+    """Names assigned inside any procedural block (reg/wire inference, rule 6).
+
+    Descends into ``GenFor`` items: a module-level signal driven only inside a
+    generate loop's procedural block still infers ``reg`` in Verilog (IR_SPEC
+    §10.1 — signals are declared full-width outside the loop and selected with
+    the genvar inside).
+    """
+
+    def _block_stmts(item: object) -> list[Stmt]:
         if isinstance(item, AlwaysFF):
-            stmts: list[Stmt] = list(_iter_stmts(item.reset_body))
-            stmts += list(_iter_stmts(item.body))
-        elif isinstance(item, AlwaysComb):
-            stmts = list(_iter_stmts(item.body))
-        else:
-            continue
-        for s in stmts:
+            return list(_iter_stmts(item.reset_body)) + list(_iter_stmts(item.body))
+        if isinstance(item, AlwaysComb):
+            return list(_iter_stmts(item.body))
+        return []
+
+    driven: set[str] = set()
+    procedural_items: list[object] = list(module.items)
+    for item in module.items:
+        if isinstance(item, GenFor):
+            procedural_items.extend(item.items)
+    for item in procedural_items:
+        for s in _block_stmts(item):
             if isinstance(s, Assign):
                 driven.update(_lvalue_names(s.lhs))
     return frozenset(driven)
@@ -154,6 +168,9 @@ class BaseRenderer:
         self.style = style
         self.names = build_name_map(module, style)
         self.procedural = procedural_targets(module)
+        self._enums: dict[str, EnumDecl] = {
+            e.name: e for e in module.items if isinstance(e, EnumDecl)
+        }
         self._lines: list[str] = []
         self._level = 0
 
@@ -317,6 +334,15 @@ class BaseRenderer:
             return f"[{width.value - 1}:0]"
         return f"[{self._coperand(width)}-1:0]"
 
+    def _enum_range(self, enum_type: str) -> str:
+        """``[N-1:0]`` packed range for an ``enum_type`` layout (IR_SPEC §10.3).
+
+        Reuses :func:`enum_layout` — the single source of the enum vector width;
+        no duplication of the encoding-width computation.
+        """
+        width, _values = enum_layout(self._enums[enum_type])
+        return f"[{width - 1}:0]"
+
     # ------------------------------------------------------------------ #
     # statements
     # ------------------------------------------------------------------ #
@@ -447,17 +473,84 @@ class BaseRenderer:
                 self._emit(f".{k}({self._expr(conns[k])}){comma}")
         self._emit(");")
 
+    def _emit_genfor(self, gf: GenFor) -> None:
+        """Generate-for loop (IR_SPEC §10.1).
+
+        Both languages wrap the loop in explicit ``generate``/``endgenerate``
+        (spec §10.1). SV declares the genvar inline in the loop header
+        (``for (genvar i = ...)``); Verilog-2001 declares ``genvar i;`` before
+        the ``generate`` block and increments with ``i = i + 1`` (no ``i++``).
+        Items render exactly as at module level, one nesting level deeper.
+        """
+        gv = self.name(gf.genvar)
+        label = self.name(gf.label)
+        count = self._cexpr(gf.count)
+        self._emit_genvar_predecl(gv)
+        self._emit("generate")
+        with self._indented():
+            self._emit(
+                f"for ({self.genvar_init(gv)} {gv} < {count};"
+                f" {self.genvar_incr(gv)}) begin : {label}"
+            )
+            with self._indented():
+                self._emit_items(self._genfor_items(gf))
+            self._emit("end")
+        self._emit("endgenerate")
+
+    def _genfor_items(self, gf: GenFor) -> list[object]:
+        """Visible items of a ``GenFor`` (comment filter applied), in order."""
+        return [
+            it
+            for it in gf.items
+            if not (isinstance(it, Comment) and not self._comment_visible(it.level))
+        ]
+
     # ------------------------------------------------------------------ #
     # declarations
     # ------------------------------------------------------------------ #
 
+    #: SV declares an ``enum_type`` signal/port with the styled typedef name as
+    #: its type (``state_t state``); Verilog ignores ``enum_type`` and declares a
+    #: plain vector of the enum layout width (IR_SPEC §10.3). Subclasses set this.
+    enum_typedef_declaration: bool = False
+
+    def _type_and_range(self, dtype: DataType, kind: str) -> tuple[str, str]:
+        """Return the ``(type_keyword, range)`` columns for a declaration.
+
+        Handles ``DataType.enum_type`` (IR_SPEC §10.3): SV substitutes the styled
+        typedef name and drops the range; Verilog keeps the inferred kind and
+        uses the enum layout width as the range. Plain vectors are unchanged.
+        """
+        if dtype.enum_type is not None:
+            if self.enum_typedef_declaration:
+                return self.name(dtype.enum_type), ""
+            return kind, self._enum_range(dtype.enum_type)
+        return kind, self._range(dtype.width)
+
     def _signal_decl(self, sig: Signal) -> str:
         kind = self.signal_kind(sig)
+        typ, rng = self._type_and_range(sig.dtype, kind)
         signed = " signed" if sig.dtype.signed else ""
-        rng = self._range(sig.dtype.width)
-        decl = kind + signed + (f" {rng}" if rng else "") + f" {self.name(sig.name)};"
+        decl = typ + signed + (f" {rng}" if rng else "") + f" {self.name(sig.name)};"
         if sig.doc and self._docs_visible():
             decl += f"  // {sig.doc}"
+        return decl
+
+    def _memory_decl(self, mem: Memory) -> str:
+        """``<kind> [W-1:0] name <array-dim>;`` (IR_SPEC §10.2).
+
+        A memory's element storage is always a variable (procedurally written,
+        rule 9): SV emits ``logic``, Verilog emits ``reg`` — never ``wire`` —
+        regardless of the reg/wire inference used for scalar signals.
+        """
+        rng = self._range(mem.width)
+        rng_col = f" {rng}" if rng else ""
+        decl = (
+            f"{self.memory_kind()}{rng_col} {self.name(mem.name)}"
+            f" {self.memory_array_dim(mem.depth)};"
+        )
+        if mem.doc and self._docs_visible():
+            decl += f"  // {mem.doc}"
         return decl
 
     def _param_decl(self, p: Param, *, trailing: str = ";") -> str:
@@ -498,10 +591,9 @@ class BaseRenderer:
         """(direction, kind, range, rendered name, doc) per port."""
         rows: list[tuple[str, str, str, str, str]] = []
         for p in self.module.ports:
-            kind = self.port_kind(p) + (" signed" if p.dtype.signed else "")
-            rows.append(
-                (p.dir.value, kind, self._range(p.dtype.width), self.name(p.name), p.doc)
-            )
+            typ, rng = self._type_and_range(p.dtype, self.port_kind(p))
+            kind = typ + (" signed" if p.dtype.signed else "")
+            rows.append((p.dir.value, kind, rng, self.name(p.name), p.doc))
         return rows
 
     def _emit_ports(self) -> None:
@@ -527,7 +619,7 @@ class BaseRenderer:
 
     #: Single-line declaration-ish items; consecutive ones stay contiguous,
     #: everything else is separated by a blank line (STYLE_GUIDE §6).
-    _INLINE_ITEMS = (Signal, Param, Comment)
+    _INLINE_ITEMS = (Signal, Param, Comment, Memory)
 
     def _body_items(self) -> list[object]:
         # local params render inside the body, before the remaining items.
@@ -543,7 +635,7 @@ class BaseRenderer:
         return [
             it
             for it in self._body_items()
-            if isinstance(it, (ContAssign, AlwaysFF, AlwaysComb, Instance, Comment))
+            if isinstance(it, (ContAssign, AlwaysFF, AlwaysComb, Instance, Comment, GenFor))
         ]
 
     def _emit_items(self, items: list[object]) -> None:
@@ -576,6 +668,10 @@ class BaseRenderer:
             self._emit_always_comb(it)
         elif isinstance(it, Instance):
             self._emit_instance(it)
+        elif isinstance(it, Memory):
+            self._emit(self._memory_decl(it))
+        elif isinstance(it, GenFor):
+            self._emit_genfor(it)
         else:
             raise TypeError(f"unrenderable module item: {it!r}")
 
@@ -597,6 +693,8 @@ class BaseRenderer:
         for it in self.module.items:
             if isinstance(it, Signal):
                 self._emit(f"//     {self._signal_decl(it)}")
+            elif isinstance(it, Memory):
+                self._emit(f"//     {self._memory_decl(it)}")
             elif isinstance(it, EnumDecl):
                 start = len(self._lines)
                 self._emit_enum_decl(it)
@@ -622,6 +720,26 @@ class BaseRenderer:
         raise NotImplementedError
 
     def signal_kind(self, sig: Signal) -> str:
+        raise NotImplementedError
+
+    def memory_kind(self) -> str:
+        """Storage kind for a ``Memory`` element (``logic`` / ``reg``)."""
+        raise NotImplementedError
+
+    def memory_array_dim(self, depth: Expr) -> str:
+        """Unpacked array dimension: SV ``[DEPTH]`` / Verilog ``[0:DEPTH-1]``."""
+        raise NotImplementedError
+
+    def genvar_init(self, genvar: str) -> str:
+        """The genvar init clause of a generate-for header (``genvar i = 0;``)."""
+        raise NotImplementedError
+
+    def genvar_incr(self, genvar: str) -> str:
+        """The genvar increment clause (``i++`` / ``i = i + 1``)."""
+        raise NotImplementedError
+
+    def _emit_genvar_predecl(self, genvar: str) -> None:
+        """Emit a ``genvar i;`` declaration before ``generate`` (Verilog only)."""
         raise NotImplementedError
 
     def _emit_enum_decl(self, decl: EnumDecl) -> None:
