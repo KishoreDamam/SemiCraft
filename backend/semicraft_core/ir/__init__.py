@@ -6,7 +6,7 @@ Public API: node classes and enums (:mod:`.nodes`), builder helpers
 
 from __future__ import annotations
 
-from .build import IN, OUT, add, bit, const, sub, vec, width
+from .build import IN, OUT, add, bit, const, enum_t, genfor, mem, sub, vec, width
 from .nodes import (
     AlwaysComb,
     AlwaysFF,
@@ -29,9 +29,11 @@ from .nodes import (
     EnumEncoding,
     EnumRef,
     Expr,
+    GenFor,
     Header,
     If,
     Instance,
+    Memory,
     Module,
     ModuleItem,
     Param,
@@ -92,6 +94,8 @@ __all__ = [
     "AlwaysFF",
     "AlwaysComb",
     "Instance",
+    "GenFor",
+    "Memory",
     # enums
     "UnaryOpKind",
     "BinOpKind",
@@ -110,6 +114,9 @@ __all__ = [
     "const",
     "add",
     "sub",
+    "enum_t",
+    "mem",
+    "genfor",
     # validation
     "validate",
     "IRValidationError",

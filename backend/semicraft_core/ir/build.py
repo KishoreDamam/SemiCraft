@@ -7,6 +7,8 @@ are not in the node catalog.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from .nodes import (
     BinOp,
     BinOpKind,
@@ -14,6 +16,9 @@ from .nodes import (
     ConstBase,
     DataType,
     Expr,
+    GenFor,
+    Memory,
+    ModuleItem,
     PortDir,
     Ref,
 )
@@ -71,3 +76,39 @@ def add(a: Expr, b: Expr) -> BinOp:
 def sub(a: Expr, b: Expr) -> BinOp:
     """``a - b``."""
     return BinOp(BinOpKind.SUB, a, b)
+
+
+# --- v0.2 module-item helpers (IR_SPEC §10) --------------------------------
+
+
+def enum_t(name: str) -> DataType:
+    """An enum-typed ``DataType`` (IR_SPEC §10.3); ``width`` stays ``None``."""
+    return DataType(enum_type=name)
+
+
+def mem(
+    name: str,
+    width: int | str | Expr,
+    depth: int | str | Expr,
+    *,
+    doc: str = "",
+) -> Memory:
+    """Build a ``Memory`` (IR_SPEC §10.2). ``width``/``depth`` accept int, name,
+    or ``Expr`` (coerced via :func:`width`)."""
+    return Memory(name=name, width=_expr(width), depth=_expr(depth), doc=doc)
+
+
+def genfor(
+    label: str,
+    genvar: str,
+    count: int | str | Expr,
+    items: Sequence[ModuleItem],
+) -> GenFor:
+    """Build a ``GenFor`` (IR_SPEC §10.1). ``count`` accepts int, name, or
+    ``Expr``."""
+    return GenFor(label=label, genvar=genvar, count=_expr(count), items=items)
+
+
+def _expr(n_or_name: int | str | Expr) -> Expr:
+    """Coerce int -> ``Const``, str -> ``Ref``, ``Expr`` -> unchanged."""
+    return width(n_or_name)

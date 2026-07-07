@@ -13,7 +13,7 @@ always_ff vs always) never appear here; they live in renderers (design rule 2).
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 
 # ---------------------------------------------------------------------------
@@ -330,10 +330,17 @@ class ResetSpec:
 
 @dataclass(frozen=True, slots=True)
 class DataType:
-    """Packed 1-D vector type. ``width=None`` -> 1-bit scalar (IR_SPEC §3.3)."""
+    """Packed 1-D vector type. ``width=None`` -> 1-bit scalar (IR_SPEC §3.3).
+
+    ``enum_type`` (IR_SPEC §10.3) optionally names an ``EnumDecl`` in the same
+    module. It is keyword-only so existing positional ``DataType(width, signed)``
+    call sites are unaffected. When set, ``width`` must be ``None`` (the width
+    comes from the enum layout — validation rule 10).
+    """
 
     width: Expr | None = None
     signed: bool = False
+    enum_type: str | None = field(default=None, kw_only=True)
 
 
 # ---------------------------------------------------------------------------
@@ -464,6 +471,50 @@ class Instance(ModuleItem):
     @property
     def conns_dict(self) -> dict[str, Expr]:
         return dict(self.conns)
+
+
+@dataclass(frozen=True, slots=True)
+class GenFor(ModuleItem):
+    """Generate-for loop (IR_SPEC §10.1).
+
+    Iterates ``genvar`` over ``[0, count)``, replicating ``items``. Allowed
+    member types (``ContAssign``, ``Instance``, ``AlwaysFF``, ``AlwaysComb``,
+    ``Comment``) are enforced in validation, not construction — the constructor
+    only coerces the sequence to a tuple. No nested ``GenFor`` and no ``Signal``
+    declarations inside (§10.1).
+    """
+
+    label: str
+    genvar: str
+    count: Expr
+    items: tuple[ModuleItem, ...]
+
+    def __init__(
+        self,
+        label: str,
+        genvar: str,
+        count: Expr,
+        items: Sequence[ModuleItem],
+    ) -> None:
+        object.__setattr__(self, "label", label)
+        object.__setattr__(self, "genvar", genvar)
+        object.__setattr__(self, "count", count)
+        object.__setattr__(self, "items", tuple(items))
+
+
+@dataclass(frozen=True, slots=True)
+class Memory(ModuleItem):
+    """Unpacked array / memory (IR_SPEC §10.2).
+
+    Shares the signal namespace. Accessed by element select only
+    (``Bit(target=Ref(name), index=...)``); written only inside ``AlwaysFF``;
+    read in ``AlwaysFF``/``AlwaysComb``/``ContAssign`` rhs (validation rule 9).
+    """
+
+    name: str
+    width: Expr
+    depth: Expr
+    doc: str = ""
 
 
 @dataclass(frozen=True, slots=True)
