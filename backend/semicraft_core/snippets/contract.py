@@ -210,12 +210,36 @@ class SnippetDef(Protocol):
 
     ``generate``/``explain`` receive an already-validated ``options_model``
     instance (validation happens in :func:`semicraft_core.generate.generate`).
+
+    Catalog taxonomy (Phase-2 Appendix A.2)
+    ---------------------------------------
+
+    The catalog surface gained two taxonomy fields, ``kind`` and ``maturity``.
+    Existing snippet files (the ten WP-05 modules) do NOT declare them, so they
+    are read from the def with ``getattr`` defaulting at the *registry* layer
+    (:func:`.registry.item_kind` / :func:`.registry.item_maturity`): a snippet
+    that omits ``kind`` is treated as ``"snippet"`` and one that omits
+    ``maturity`` as ``"stable"``. This keeps the Protocol structural (a plain
+    dataclass with only the four original attributes still satisfies it) and
+    requires zero edits to the shipped snippet files. ``kind``/``maturity`` are
+    intentionally NOT declared as Protocol members (see the note below the
+    method annotations) so that ``isinstance(obj, SnippetDef)`` stays true for
+    the existing defs. ``ModuleDef`` (Phase-2 P2-04) sets ``kind = "module"``
+    explicitly; future ``ip``/``subsystem``/``app`` kinds follow the same rule.
     """
 
     id: str
     name: str
     description: str
     options_model: type[BaseModel]
+    # NOTE on taxonomy (kind/maturity): these are deliberately NOT declared as
+    # Protocol members. Under ``@runtime_checkable``, every annotated non-method
+    # member becomes a required attribute for ``isinstance``; adding ``kind``
+    # here would make ``isinstance(existing_snippet, SnippetDef)`` False for the
+    # ten shipped snippet files, which do not set it. Instead the registry reads
+    # them with getattr-defaulting (``kind`` -> "snippet", ``maturity`` ->
+    # "stable"); see :func:`.registry.item_kind` / :func:`.registry.item_maturity`
+    # and the class docstring above.
 
     def generate(self, opts: BaseModel) -> Module:  # pragma: no cover - protocol
         ...
