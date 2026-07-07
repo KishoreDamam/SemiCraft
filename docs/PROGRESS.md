@@ -43,7 +43,7 @@ Updated: 2026-07-04. Keep current — this file is the session-handoff state.
 | WP | Status | Notes |
 |---|---|---|
 | P2-01 decisions | DONE, committed 745b89e, pushed | IR_SPEC §10 (GenFor/Memory/enum_type, rules 8-11); plan Appendix A (API v2, taxonomy, ModuleDef/TbSpec) |
-| P2-02 IR v0.2 | IN FLIGHT (opus, background) | owns ir/ + tests/ir/test_v02_*. Recovery: check uncommitted ir/ changes, verify ruff+pytest (existing 864 must stay green), commit "P2-02: ..." |
-| P2-04 ModuleDef | IN FLIGHT (opus, background) | owns snippets/contract+registry+generate.py extensions, new modules/ pkg (edge_detector reference), tests/modules/. Recovery: same pattern; after both land run `uv run pytest backend/tests/golden --update-golden` for edge-detector snapshots |
+| P2-02 IR v0.2 | DONE, committed, pushed | 34 tests; rules 8-11; genvar cross-loop reuse forbidden |
+| P2-04 ModuleDef | DONE, committed e1c0f68, pushed | 55 tests + 23 goldens; registry-side kind/maturity defaulting; generate_files() rtl+doc; edge-detector reference module; 999 total green |
 | P2-03 renderers | NEXT (opus + extra review pass) | after P2-02 |
 | P2-05..15 | queued per plan | 2-agent budget per session (user constraint) |
