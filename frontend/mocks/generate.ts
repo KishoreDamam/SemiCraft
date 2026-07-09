@@ -1,12 +1,16 @@
 import type {
   ExplanationDoc,
   GenerateResponse,
+  GenerateV2Response,
+  GeneratedFile,
   JsonSchema,
+  LintFileReport,
   LintReport,
   ValidationErrorItem,
+  ZipDownload,
 } from "@/lib/types";
 import { configHash } from "@/lib/hash";
-import { mockCatalog } from "@/mocks/catalog";
+import { mockCatalog, mockCatalogV2 } from "@/mocks/catalog";
 import { flattenSchema } from "@/lib/schema";
 
 /**
@@ -458,5 +462,173 @@ export async function mockGenerate(
     explanation,
     lint: mockLint(snippetId, options),
     config_hash: hash,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// v2 mock: multi-file generation. Snippets wrap the v1 output in a single rtl
+// file; module-kind items (edge-detector) emit rtl + doc files. Lint is a LIST
+// with one entry per rtl file, matching the backend v2 contract.
+// ---------------------------------------------------------------------------
+
+function getV2Entry(itemId: string) {
+  const entry = mockCatalogV2.items.find((i) => i.id === itemId);
+  if (!entry) throw new MockNotFoundError(itemId);
+  return entry;
+}
+
+/** Doc file (markdown) for a module, including the contract's port table. */
+function emitEdgeDetectorDoc(
+  name: string,
+  hash: string,
+  opts: Record<string, unknown>,
+): string {
+  const rst = rstName(opts);
+  const width = Number(opts.width ?? 1);
+  const busSuffix = width > 1 ? ` [${width - 1}:0]` : "";
+  return [
+    `# ${name}`,
+    ``,
+    `_SemiCraft (mock) — config_hash: ${hash}_`,
+    ``,
+    `Detects ${opts.edge ?? "rising"} edges on a ${width}-bit input and emits a`,
+    `one-cycle pulse per detected edge.`,
+    ``,
+    `## Ports`,
+    ``,
+    `| Port | Direction | Description |`,
+    `| ---- | --------- | ----------- |`,
+    `| clk | input | Clock. |`,
+    `| ${rst} | input | Reset. |`,
+    `| d${busSuffix} | input | Signal under observation. |`,
+    `| edge_o${busSuffix} | output | One-cycle edge pulse. |`,
+    ``,
+  ].join("\n");
+}
+
+function emitEdgeDetector(opts: Record<string, unknown>): string {
+  const sv = opts.language !== "verilog";
+  const rst = rstName(opts);
+  const width = Number(opts.width ?? 1);
+  const bus = width > 1 ? `[WIDTH-1:0] ` : "";
+  const detect =
+    opts.edge === "falling"
+      ? "d_prev & ~d"
+      : opts.edge === "both"
+        ? "d ^ d_prev"
+        : "d & ~d_prev";
+  return [
+    `module edge_detector #(`,
+    `  parameter int WIDTH = ${width}`,
+    `) (`,
+    `  input  wire ${rst === "rst_n" ? "" : ""}      clk,`,
+    `  input  wire       ${rst},`,
+    `  input  wire ${bus}d,`,
+    `  output ${sv ? "logic" : "reg  "} ${bus}edge_o`,
+    `);`,
+    ``,
+    `  ${sv ? "logic" : "reg  "} ${bus}d_prev;`,
+    ``,
+    `  ${sv ? "always_ff" : "always"} @(posedge clk) begin`,
+    `    if (${opts.reset_polarity === "active_high" ? rst : `!${rst}`}) d_prev <= '0;`,
+    `    else d_prev <= d;`,
+    `  end`,
+    ``,
+    `  assign edge_o = ${detect};`,
+    ``,
+    `endmodule`,
+    ``,
+  ].join("\n");
+}
+
+function explainEdgeDetector(opts: Record<string, unknown>): ExplanationDoc {
+  return {
+    purpose: `A clocked ${opts.edge ?? "rising"}-edge detector.`,
+    configuration: [
+      `Width: ${opts.width ?? 1} bit(s)`,
+      `Edge: ${opts.edge ?? "rising"}`,
+      `Reset (${opts.reset_style ?? "sync"}, ${opts.reset_polarity ?? "active_low"})`,
+      `Language: ${opts.language ?? "sv"}`,
+    ],
+    signals: [
+      { name: "clk", direction: "input", description: "Clock." },
+      { name: rstName(opts), direction: "input", description: "Reset." },
+      { name: "d", direction: "input", description: "Signal under observation." },
+      { name: "edge_o", direction: "output", description: "One-cycle edge pulse." },
+    ],
+    reset_behavior: "On reset the delayed sample clears to zero.",
+    enable_behavior: null,
+    assumptions: ["Single clock domain.", "Input is synchronous to clk."],
+    limitations: ["Multi-bit detection is per-bit, not a bus-level event."],
+  };
+}
+
+export async function mockGenerateV2(
+  itemId: string,
+  options: Record<string, unknown>,
+): Promise<GenerateV2Response> {
+  const entry = getV2Entry(itemId); // throws MockNotFoundError
+
+  // Per-field + cross-field validation -> 422 (same path as v1).
+  const errors: ValidationErrorItem[] = [];
+  const props = entry.json_schema.properties ?? {};
+  for (const [name, sub] of Object.entries(props)) {
+    validateField(name, sub, entry.json_schema, options[name], errors);
+  }
+  crossFieldValidate(itemId, options, errors);
+  if (errors.length > 0) throw new MockValidationError(errors);
+
+  const language = options.language === "verilog" ? "verilog" : "sv";
+  const hash = await configHash(itemId, options);
+  const files: GeneratedFile[] = [];
+
+  if (entry.kind === "module" && itemId === "edge-detector") {
+    const rtlPath = `edge_detector.${ext(language)}`;
+    files.push({
+      path: rtlPath,
+      kind: "rtl",
+      text: HEADER(entry.name, hash, language) + emitEdgeDetector(options),
+    });
+    files.push({
+      path: "edge_detector.md",
+      kind: "doc",
+      text: emitEdgeDetectorDoc(entry.name, hash, options),
+    });
+    const lint: LintFileReport[] = [
+      { path: rtlPath, ...mockLint(itemId, options) },
+    ];
+    return {
+      files,
+      explanation: explainEdgeDetector(options),
+      lint,
+      config_hash: hash,
+      language,
+    };
+  }
+
+  // Snippet-kind: single rtl file wrapping the v1 output.
+  const v1 = await mockGenerate(itemId, options);
+  files.push({ path: v1.filename, kind: "rtl", text: v1.code });
+  return {
+    files,
+    explanation: v1.explanation,
+    lint: [{ path: v1.filename, ...v1.lint }],
+    config_hash: v1.config_hash,
+    language: v1.language,
+  };
+}
+
+/** Mock of POST /api/v2/generate/zip — returns a synthetic zip-like blob. */
+export async function mockZip(
+  itemId: string,
+  options: Record<string, unknown>,
+): Promise<ZipDownload> {
+  const data = await mockGenerateV2(itemId, options);
+  // Not a real zip archive (the mock layer is for UI dev only); callers that
+  // need byte-faithful zips point NEXT_PUBLIC_API_BASE at the backend.
+  const payload = data.files.map((f) => `=== ${f.path} ===\n${f.text}`).join("\n\n");
+  return {
+    blob: new Blob([payload], { type: "application/zip" }),
+    filename: `semicraft_${itemId}_${data.config_hash}.zip`,
   };
 }

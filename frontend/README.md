@@ -25,8 +25,28 @@ The single API client (`lib/api.ts`) has two modes, selected by the
 
 - **Unset (default):** all data is served from the local mock layer (`mocks/`).
   `npm run dev` works standalone — no backend needed.
-- **Set:** calls hit the real FastAPI backend at `${NEXT_PUBLIC_API_BASE}/api/v1/...`
-  (the frozen §4 contract in `docs/IMPLEMENTATION_PLAN.md`).
+- **Set:** calls hit the real FastAPI backend at `${NEXT_PUBLIC_API_BASE}/api/...`
+  (the frozen contracts in `docs/IMPLEMENTATION_PLAN.md` §4 and
+  `docs/PLAN-semicraft-phases-2-8.md` Appendix A.1).
+
+### API version
+
+The UI runs entirely on **API v2** (multi-file). One code path serves both
+snippets and modules:
+
+- `getCatalog()` → `GET /api/v2/catalog` — `items[]` carry `kind`
+  (`snippet`/`module`) and `maturity` (`stable`/`beta`); the picker groups them
+  into Snippets / Modules and badges non-stable items.
+- `generateV2(item_id, options)` → `POST /api/v2/generate` — returns
+  `files[]` (`{path, kind: rtl|tb|doc, text}`), a per-file `lint[]` list
+  (rtl files only; the badge aggregates to the worst status), plus
+  `explanation`, `config_hash`, `language`.
+- `downloadZip(item_id, options)` → `POST /api/v2/generate/zip` — saves the
+  archive, filename taken from `Content-Disposition`. Single-file results use a
+  plain blob download of the active file instead.
+
+The v1 client helpers (`fetchCatalog`, `generate`) remain in `lib/api.ts` for
+the frozen §4 contract tests, but the app itself no longer calls them.
 
 ### Two-terminal dev flow (frontend against the real backend)
 

@@ -1,18 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { CatalogResponse } from "@/lib/types";
-import { fetchCatalog } from "@/lib/api";
+import type { CatalogV2Response } from "@/lib/types";
+import { getCatalog } from "@/lib/api";
 import { GeneratorApp, useInitialPermalink } from "@/components/GeneratorApp";
 
 export default function Home() {
-  const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
+  const [catalog, setCatalog] = useState<CatalogV2Response | null>(null);
   const [error, setError] = useState<string | null>(null);
   const initialState = useInitialPermalink();
 
   useEffect(() => {
     let cancelled = false;
-    fetchCatalog()
+    getCatalog()
       .then((c) => {
         if (!cancelled) setCatalog(c);
       })

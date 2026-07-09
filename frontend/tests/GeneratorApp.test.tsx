@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { GeneratorApp } from "@/components/GeneratorApp";
-import { mockCatalog } from "@/mocks/catalog";
+import { mockCatalogV2 } from "@/mocks/catalog";
 import type { PermalinkState } from "@/lib/permalink";
 
 // Monaco needs the DOM/canvas APIs jsdom lacks; stub it with a <pre> that
@@ -27,7 +27,7 @@ function code() {
 
 describe("generate flow against mocks", () => {
   it("generates the default counter on mount", async () => {
-    render(<GeneratorApp catalog={mockCatalog} debounceMs={0} />);
+    render(<GeneratorApp catalog={mockCatalogV2} debounceMs={0} />);
     await waitFor(() => expect(code()).toContain("module counter"));
     // lint badge for clean counter
     expect(screen.getByText(/Lint clean/)).toBeInTheDocument();
@@ -37,7 +37,7 @@ describe("generate flow against mocks", () => {
   });
 
   it("updates the preview when an option changes (debounced)", async () => {
-    render(<GeneratorApp catalog={mockCatalog} debounceMs={0} />);
+    render(<GeneratorApp catalog={mockCatalogV2} debounceMs={0} />);
     await waitFor(() => expect(code()).toContain("module counter"));
     await waitFor(() => expect(code()).toContain("WIDTH = 8"));
 
@@ -48,7 +48,7 @@ describe("generate flow against mocks", () => {
   });
 
   it("maps a 422 onto the offending field inline", async () => {
-    render(<GeneratorApp catalog={mockCatalog} debounceMs={0} />);
+    render(<GeneratorApp catalog={mockCatalogV2} debounceMs={0} />);
     await waitFor(() => expect(code()).toContain("module counter"));
 
     const width = screen.getByLabelText("Width");
@@ -60,7 +60,7 @@ describe("generate flow against mocks", () => {
   });
 
   it("switches snippets and shows fsm widgets + warnings badge", async () => {
-    render(<GeneratorApp catalog={mockCatalog} debounceMs={0} />);
+    render(<GeneratorApp catalog={mockCatalogV2} debounceMs={0} />);
     await waitFor(() => expect(code()).toContain("module counter"));
 
     await userEvent.click(screen.getByRole("option", { name: /FSM Template/ }));
@@ -74,9 +74,9 @@ describe("generate flow against mocks", () => {
   it("restores state from an initial permalink", async () => {
     const initial: PermalinkState = {
       snippet_id: "counter",
-      options: { ...mockCatalog.snippets[0].defaults, width: 24, direction: "down" },
+      options: { ...mockCatalogV2.items[0].defaults, width: 24, direction: "down" },
     };
-    render(<GeneratorApp catalog={mockCatalog} initialState={initial} debounceMs={0} />);
+    render(<GeneratorApp catalog={mockCatalogV2} initialState={initial} debounceMs={0} />);
     await waitFor(() => expect(code()).toContain("WIDTH = 24"));
     expect(screen.getByLabelText("Width")).toHaveValue(24);
     const dir = screen.getByRole("radiogroup", { name: "Direction" });
@@ -87,7 +87,7 @@ describe("generate flow against mocks", () => {
   });
 
   it("copy button writes the generated code to the clipboard", async () => {
-    render(<GeneratorApp catalog={mockCatalog} debounceMs={0} />);
+    render(<GeneratorApp catalog={mockCatalogV2} debounceMs={0} />);
     await waitFor(() => expect(code()).toContain("module counter"));
     await userEvent.click(screen.getByRole("button", { name: "Copy" }));
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
@@ -96,7 +96,7 @@ describe("generate flow against mocks", () => {
   });
 
   it("writes the permalink into the URL as it changes", async () => {
-    render(<GeneratorApp catalog={mockCatalog} debounceMs={0} />);
+    render(<GeneratorApp catalog={mockCatalogV2} debounceMs={0} />);
     await waitFor(() => expect(window.location.search).toContain("c="));
   });
 });

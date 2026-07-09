@@ -12,11 +12,11 @@ export function CodePreview({
   language,
 }: {
   code: string;
-  language: "sv" | "verilog";
+  language: "sv" | "verilog" | "markdown";
 }) {
-  // Monaco ships a "verilog" grammar; use it for both targets.
-  void language;
-  const monacoLang = "verilog";
+  // Monaco ships a "verilog" grammar; use it for both HDL targets. Doc files
+  // pass "markdown" and get Monaco's built-in markdown grammar.
+  const monacoLang = language === "markdown" ? "markdown" : "verilog";
 
   return (
     <div className="h-full min-h-[300px] w-full overflow-hidden rounded border border-zinc-200 dark:border-zinc-800">

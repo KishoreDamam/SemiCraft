@@ -1,4 +1,10 @@
-import type { CatalogResponse, JsonSchema, SnippetCatalogEntry } from "@/lib/types";
+import type {
+  CatalogItem,
+  CatalogResponse,
+  CatalogV2Response,
+  JsonSchema,
+  SnippetCatalogEntry,
+} from "@/lib/types";
 import { counterSchema, counterDefaults } from "@/mocks/schemas/counter";
 import { fsmSchema, fsmDefaults } from "@/mocks/schemas/fsm";
 
@@ -419,3 +425,54 @@ const entries: SnippetCatalogEntry[] = [
 ];
 
 export const mockCatalog: CatalogResponse = { snippets: entries };
+
+// ---- edge-detector (P2 module, kind "module") ----
+// A clocked edge detector: a representative module-kind item that generates
+// both an rtl file and a doc file (mirrors the backend's multi-file output).
+const edgeDetectorSchema = objectSchema("EdgeDetectorOptions", {
+  ...commonClockedProps,
+  width: {
+    type: "integer",
+    title: "Width",
+    description: "Signal width (per-bit edge detection).",
+    minimum: 1,
+    maximum: 256,
+    default: 1,
+  },
+  edge: {
+    type: "string",
+    title: "Edge",
+    description: "Which edge(s) to detect.",
+    enum: ["rising", "falling", "both"],
+    default: "rising",
+  },
+});
+const edgeDetectorDefaults = {
+  ...commonClockedDefaults,
+  width: 1,
+  edge: "rising",
+};
+
+// v2 catalog: every v1 snippet carries kind "snippet"/maturity "stable"
+// (byte-compatible defaults), plus module-kind items like edge-detector.
+const snippetItems: CatalogItem[] = entries.map((e) => ({
+  ...e,
+  kind: "snippet",
+  maturity: "stable",
+}));
+
+const moduleItems: CatalogItem[] = [
+  {
+    id: "edge-detector",
+    name: "Edge Detector",
+    description: "Clocked rising/falling/both edge detector with pulse output.",
+    kind: "module",
+    maturity: "beta",
+    json_schema: edgeDetectorSchema,
+    defaults: edgeDetectorDefaults,
+  },
+];
+
+export const mockCatalogV2: CatalogV2Response = {
+  items: [...snippetItems, ...moduleItems],
+};

@@ -125,3 +125,63 @@ export type GenerateResult =
   | { ok: true; data: GenerateResponse }
   | { ok: false; status: 422; fieldErrors: Record<string, string> }
   | { ok: false; status: number; message: string };
+
+// ---------------------------------------------------------------------------
+// API v2 (multi-file). See docs/PLAN-semicraft-phases-2-8.md Appendix A.1.
+// ---------------------------------------------------------------------------
+
+/** Item taxonomy in the v2 catalog. More kinds land in later phases. */
+export type ItemKind = "snippet" | "module";
+
+export type Maturity = "stable" | "beta";
+
+/** One entry from GET /api/v2/catalog. Superset of SnippetCatalogEntry. */
+export interface CatalogItem extends SnippetCatalogEntry {
+  kind: ItemKind;
+  maturity: Maturity;
+}
+
+export interface CatalogV2Response {
+  items: CatalogItem[];
+}
+
+/** Kind of a generated file. `tb` is reserved (P2-13); not emitted yet. */
+export type FileKind = "rtl" | "tb" | "doc";
+
+export interface GeneratedFile {
+  path: string;
+  kind: FileKind;
+  text: string;
+}
+
+/** Per-file lint entry — v2 lint is a LIST, one entry per rtl file. */
+export interface LintFileReport extends LintReport {
+  path: string;
+}
+
+/** Body for POST /api/v2/generate and /api/v2/generate/zip. */
+export interface GenerateV2Request {
+  item_id: string;
+  options: Record<string, unknown>;
+}
+
+/** 200 body for POST /api/v2/generate. */
+export interface GenerateV2Response {
+  files: GeneratedFile[];
+  explanation: ExplanationDoc;
+  lint: LintFileReport[];
+  config_hash: string;
+  language: "sv" | "verilog";
+}
+
+/** Discriminated result of a v2 generate call, mirroring GenerateResult. */
+export type GenerateV2Result =
+  | { ok: true; data: GenerateV2Response }
+  | { ok: false; status: 422; fieldErrors: Record<string, string> }
+  | { ok: false; status: number; message: string };
+
+/** A zip blob plus the filename parsed from Content-Disposition. */
+export interface ZipDownload {
+  blob: Blob;
+  filename: string;
+}
