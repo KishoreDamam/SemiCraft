@@ -45,7 +45,10 @@ def test_module_reports_module_kind() -> None:
 
 def test_by_kind_module_returns_only_modules() -> None:
     modules = registry.by_kind("module")
-    assert [m.id for m in modules] == ["edge-detector"]
+    # Grows as later P2-0x module WPs land; sorted by id (registry.by_kind order).
+    assert [m.id for m in modules] == sorted(
+        ["edge-detector", "debouncer", "clock-divider", "pwm"]
+    )
     for m in modules:
         assert registry.item_kind(m) == "module"
 
