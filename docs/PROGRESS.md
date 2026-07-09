@@ -47,7 +47,7 @@ Updated: 2026-07-04. Keep current — this file is the session-handoff state.
 | P2-04 ModuleDef | DONE, committed e1c0f68, pushed | 55 tests + 23 goldens; registry-side kind/maturity defaulting; generate_files() rtl+doc; edge-detector reference module; 999 total green |
 | P2-03 renderers | DONE, committed a4c528d, pushed | 25 golden tests; explicit generate/endgenerate both languages; fixed 2 latent GenFor-scope bugs (reset naming, reg/wire inference) |
 | P2-05a API v2 backend | DONE, committed e45f455, pushed | 14 tests; catalog+generate+deterministic zip; v1 regression-guarded |
-| P2-05b frontend v2 UI | IN FLIGHT (opus, background) | owns frontend/ only. Recovery: verify npm build/test/lint, commit "P2-05b: ..." |
-| P2-06/07/08 debouncer+clock-divider+pwm | IN FLIGHT (sonnet, background, one agent) | owns modules/{debouncer,clock_divider,pwm}.py + tests + golden cases. Recovery: verify, run --update-golden, commit "P2-06..08: ..." |
+| P2-05b frontend v2 UI | DONE, committed 53a35c1, pushed | full v2 migration single path; CatalogPicker kind groups + beta badges; FileTabs; zip download; 163 frontend tests |
+| P2-06/07/08 debouncer+clock-divider+pwm | DONE, committed, pushed | 99 tests, 36 golden cases, snapshots generated; 1267 backend total |
 | NEXT after | P2-09..12 (arbiter opus, lfsr+gray sonnet), P2-13 smoke-TB (opus), P2-14 CI, P2-15 release | |
 | P2-05..15 | queued per plan | 2-agent budget per session (user constraint) |
