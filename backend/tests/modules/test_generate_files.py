@@ -52,16 +52,19 @@ def test_snippet_verilog_language_reported() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# module path: rtl + doc, no tb (EMIT_TB off)
+# module path: rtl + doc + tb (EMIT_TB on since P2-13)
 # --------------------------------------------------------------------------- #
 
 
-def test_module_yields_rtl_and_doc_no_tb() -> None:
+def test_module_yields_rtl_doc_and_tb() -> None:
     res = generate_files("edge-detector", {})
     kinds = [f.kind for f in res.files]
-    assert kinds == ["rtl", "doc"]  # rtl first, then doc; no tb
-    assert not EMIT_TB  # sanity: TB emission is still feature-flagged off
-    assert all(f.kind != "tb" for f in res.files)
+    assert kinds == ["rtl", "doc", "tb"]
+    assert EMIT_TB  # TB emission enabled by P2-13
+    tb = next(f for f in res.files if f.kind == "tb")
+    assert tb.path == "edge_detector_tb.sv"
+    assert "module edge_detector_tb;" in tb.text
+    assert "$finish" in tb.text
 
 
 def test_module_rtl_file() -> None:

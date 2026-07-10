@@ -34,6 +34,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from .ir.nodes import Module
 from .license import DISCLAIMER
 from .modules.contract import PortGroup
 from .render import StyleOptions, render
@@ -53,7 +54,7 @@ __all__ = [
 # Smoke-TB emission is feature-flagged OFF until P2-13 lands the TB generator
 # that consumes ``ModuleDef.tb_spec``. When P2-13 arrives it flips this to True
 # and adds the ``tb`` file to ``generate_files`` (see the guard there).
-EMIT_TB = False
+EMIT_TB = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -210,11 +211,13 @@ def _stamp_header(module, chash: str):
     return dataclasses.replace(module, header=header)
 
 
-def _render_rtl(item, opts, chash: str) -> tuple[str, str, str]:
-    """Render an item's RTL. Returns ``(path, text, language)``.
+def _render_rtl(item, opts, chash: str) -> tuple[str, str, str, Module]:
+    """Render an item's RTL. Returns ``(path, text, language, stamped_module)``.
 
     Shared by the snippet and module paths: builds IR, stamps the header, and
-    renders in the chosen language with the item's style options.
+    renders in the chosen language with the item's style options. The stamped
+    IR module is returned so the smoke-TB generator can resolve the exact
+    rendered port names/widths (semicraft_core.tb.generate_tb).
     """
     module = _stamp_header(item.generate(opts), chash)
     include_wrapper = getattr(opts, "include_wrapper", True)
@@ -227,7 +230,7 @@ def _render_rtl(item, opts, chash: str) -> tuple[str, str, str]:
     )
     ext = _extension(language)
     path = f"{module.name}.{ext}" if include_wrapper else f"{module.name}_fragment.{ext}"
-    return path, code, language
+    return path, code, language, module
 
 
 def _md_port_table(port_groups: list[PortGroup], explanation) -> list[str]:
@@ -300,7 +303,7 @@ def generate_files(item_id: str, options: dict) -> GenerateFilesResult:
     opts = item.options_model.model_validate(options)  # ValidationError -> 422
     chash = config_hash(item_id, opts.model_dump(mode="json"))
 
-    rtl_path, rtl_text, language = _render_rtl(item, opts, chash)
+    rtl_path, rtl_text, language, rtl_module = _render_rtl(item, opts, chash)
     files: list[GeneratedFile] = [GeneratedFile(path=rtl_path, kind="rtl", text=rtl_text)]
 
     explanation = item.explain(opts)
@@ -310,12 +313,16 @@ def generate_files(item_id: str, options: dict) -> GenerateFilesResult:
         doc_text = _module_doc(item, opts, explanation, chash)
         files.append(GeneratedFile(path=f"{doc_stem}.md", kind="doc", text=doc_text))
 
-        # Smoke-TB emission lands with P2-13 (consumes ModuleDef.tb_spec).
-        if EMIT_TB:  # pragma: no cover - flag is False until P2-13
-            from .modules.tb import render_tb  # noqa: PLC0415 - deferred import
+        # Smoke TB (P2-13): SV testbench built from ModuleDef.tb_spec against
+        # the stamped IR module, so names/widths match the rendered RTL.
+        if EMIT_TB and hasattr(item, "tb_spec"):
+            from .tb import generate_tb  # deferred: keeps tb/ optional at import
 
-            tb_path, tb_text = render_tb(item, opts, chash)
-            files.append(GeneratedFile(path=tb_path, kind="tb", text=tb_text))
+            tb_text = generate_tb(item, opts, rtl_module)
+            if tb_text:
+                files.append(
+                    GeneratedFile(path=f"{rtl_module.name}_tb.sv", kind="tb", text=tb_text)
+                )
 
     return GenerateFilesResult(
         files=files,
