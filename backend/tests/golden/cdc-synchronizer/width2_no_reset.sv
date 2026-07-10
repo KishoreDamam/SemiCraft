@@ -13,7 +13,6 @@ module cdc_synchronizer #(
     output logic [WIDTH-1:0] q          // Synchronized output, 2 clk cycles behind d_async
 );
 
-    localparam int unsigned STAGES = 2;
     logic [WIDTH-1:0] sync_ff1;  // Synchronizer stage 1
 
     always_ff @(posedge clk) begin

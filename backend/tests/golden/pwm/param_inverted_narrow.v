@@ -7,7 +7,7 @@
 
 module pwm #(
     parameter RES = 6,
-    parameter DUTY = {{(RES-6){1'b0}}, 6'b100000}
+    parameter DUTY = 32
 ) (
     input  wire clk,      // Clock
     input  wire rst_n,    // Sync reset, active-low

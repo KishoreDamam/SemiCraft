@@ -35,7 +35,7 @@ def test_default_sv_shape() -> None:
     code = generate("clock-divider", {}).code
     assert "module clock_divider #(" in code
     assert "always_ff @(posedge clk) begin" in code
-    assert "DIV = 2" in code
+    assert "CNT_WIDTH = 1" in code  # DIV is not a param (Verilator UNUSEDPARAM)
     assert "endmodule" in code
 
 
@@ -62,9 +62,11 @@ def test_pulse_style_pulses_clk_out() -> None:
     assert "~clk_out" not in code
 
 
-def test_divide_by_changes_div_param() -> None:
+def test_divide_by_changes_counter_constants() -> None:
+    # DIV is baked into the comparison constants, not emitted as a param.
     code = generate("clock-divider", {"divide_by": 100}).code
-    assert "DIV = 100" in code
+    assert "DIV =" not in code  # ratio baked into constants, not a param
+    assert "CNT_WIDTH = 7" in code  # clog2(100)
 
 
 def test_divide_by_changes_counter_width_param() -> None:

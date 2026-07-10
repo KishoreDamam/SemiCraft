@@ -89,7 +89,7 @@ def test_init_value_at_or_above_max_raises() -> None:
 
 def test_init_value_valid_range_ok() -> None:
     code = generate("lfsr", {"width": 4, "init_value": 15}).code
-    assert "INIT = 4'd15" in code or "INIT" in code
+    assert "INIT = 15" in code  # plain integer in parameter context
 
 
 def test_enable_true_adds_en_port_and_gates_shift() -> None:
@@ -115,9 +115,10 @@ def test_output_style_serial_removes_parallel_q_port() -> None:
     assert "output logic [WIDTH-1:0] q" not in serial_code
 
 
-def test_output_style_serial_out_is_feedback_expression() -> None:
+def test_output_style_serial_out_is_lsb_tap() -> None:
+    # Serial output is q[0], the bit shifting out of the register.
     code = generate("lfsr", {"output_style": "serial", "width": 4}).code
-    assert "assign out = q[3] ^ q[2];" in code
+    assert "assign out = q[0];" in code
 
 
 @pytest.mark.parametrize("reset_style", ["sync", "async"])

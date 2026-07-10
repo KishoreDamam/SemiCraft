@@ -7,7 +7,7 @@
 
 module pwm #(
     parameter int unsigned RES = 8,
-    parameter int unsigned DUTY = {{(RES-8){1'b0}}, 8'b10000000}
+    parameter int unsigned DUTY = 128
 ) (
     input  logic clk,      // Clock
     input  logic rst_n,    // Sync reset, active-low

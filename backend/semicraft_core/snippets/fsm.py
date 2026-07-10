@@ -247,7 +247,11 @@ def _next_state_block(opts: FsmOptions) -> AlwaysComb:
             )
         items.append(CaseItem([EnumRef(_ENUM_NAME, s)], arm))
 
-    body.append(Case(sel=Ref("state"), items=items, unique=True))
+    # Empty default arm: the state vector can physically hold encodings
+    # outside the enum (e.g. 3 states in 2 bits, or non-onehot patterns), so
+    # Verilator flags a defaultless case as CASEINCOMPLETE. The pre-case
+    # default assignment already defines behavior (hold state).
+    body.append(Case(sel=Ref("state"), items=items, unique=True, default=[]))
     return AlwaysComb(body)
 
 
@@ -268,7 +272,9 @@ def _output_block(opts: FsmOptions) -> AlwaysComb:
         )
         for s in opts.states
     ]
-    body.append(Case(sel=Ref("state"), items=items, unique=True))
+    # Empty default arm for the same CASEINCOMPLETE reason as the next-state
+    # case; outputs are already default-assigned above.
+    body.append(Case(sel=Ref("state"), items=items, unique=True, default=[]))
     return AlwaysComb(body)
 
 

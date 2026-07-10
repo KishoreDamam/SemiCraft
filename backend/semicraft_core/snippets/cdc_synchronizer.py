@@ -209,12 +209,12 @@ def generate(opts: CdcSynchronizerOptions) -> Module:
         body=body,
     )
 
+    # The chain is structurally unrolled, so the stage count is not emitted as
+    # a parameter (an unreferenced STAGES localparam trips Verilator's
+    # UNUSEDPARAM under -Wall); it is documented in the header/explanation.
     params = []
     if opts.width > 1:
         params.append(Param("WIDTH", Const(opts.width), doc="Synchronizer bit width"))
-    params.append(
-        Param("STAGES", Const(opts.stages), local=True, doc="Number of synchronizer stages")
-    )
 
     return Module(
         name=_MODULE_NAME,

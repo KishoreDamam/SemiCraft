@@ -7,7 +7,7 @@
 
 module lfsr #(
     parameter WIDTH = 24,
-    parameter INIT = {{(WIDTH-24){1'b0}}, 24'b101010111100110111100001}
+    parameter INIT = 11259361
 ) (
     input  wire             clk,   // Clock
     input  wire             rst,   // Async reset, active-high

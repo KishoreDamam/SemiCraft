@@ -12,7 +12,6 @@ module cdc_synchronizer (
     output reg  q          // Synchronized output, 3 clk cycles behind d_async
 );
 
-    localparam STAGES = 3;
     reg sync_ff1;  // Synchronizer stage 1
     reg sync_ff2;  // Synchronizer stage 2
 

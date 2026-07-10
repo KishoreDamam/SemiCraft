@@ -48,6 +48,7 @@ module fsm (
             s4: begin
                 // TODO: transition logic for s4
             end
+            default: ;
         endcase
     end
 

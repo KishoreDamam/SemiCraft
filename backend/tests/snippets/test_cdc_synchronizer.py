@@ -87,7 +87,9 @@ def test_stages_out_of_range_raises() -> None:
 def test_width_1_is_scalar() -> None:
     code = generate("cdc-synchronizer", {"width": 1}).code
     assert "[WIDTH-1:0]" not in code
-    assert "parameter" not in code or "STAGES" in code  # STAGES is localparam, not WIDTH
+    # No parameters at width 1: the chain is structurally unrolled and stage
+    # count is not emitted as a param (Verilator UNUSEDPARAM).
+    assert "parameter" not in code
 
 
 def test_width_gt1_adds_param_and_vector_ports() -> None:

@@ -14,7 +14,6 @@ module cdc_synchronizer #(
     output reg  [WIDTH-1:0] q          // Synchronized output, 4 clk cycles behind d_async
 );
 
-    localparam STAGES = 4;
     reg [WIDTH-1:0] sync_ff1;  // Synchronizer stage 1
     reg [WIDTH-1:0] sync_ff2;  // Synchronizer stage 2
     reg [WIDTH-1:0] sync_ff3;  // Synchronizer stage 3

@@ -7,7 +7,7 @@
 
 module lfsr #(
     parameter int unsigned WIDTH = 8,
-    parameter int unsigned INIT = {{(WIDTH-3){1'b0}}, 3'b101}
+    parameter int unsigned INIT = 5
 ) (
     input  logic             clk,     // Clock
     input  logic             rst_n,   // Sync reset, active-low

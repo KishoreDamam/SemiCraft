@@ -7,7 +7,7 @@
 
 module lfsr #(
     parameter int unsigned WIDTH = 32,
-    parameter int unsigned INIT = {{(WIDTH-1){1'b0}}, 1'b1}
+    parameter int unsigned INIT = 1
 ) (
     input  logic clk,     // Clock
     input  logic rst_n,   // Sync reset, active-low
@@ -24,6 +24,6 @@ module lfsr #(
         end
     end
 
-    assign out = ((q[31] ^ q[21]) ^ q[1]) ^ q[0];
+    assign out = q[0];
 
 endmodule

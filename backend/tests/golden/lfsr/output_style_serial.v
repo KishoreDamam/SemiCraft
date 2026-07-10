@@ -7,7 +7,7 @@
 
 module lfsr #(
     parameter WIDTH = 8,
-    parameter INIT = {{(WIDTH-1){1'b0}}, 1'b1}
+    parameter INIT = 1
 ) (
     input  wire clk,     // Clock
     input  wire rst_n,   // Sync reset, active-low
@@ -27,6 +27,6 @@ module lfsr #(
         end
     end
 
-    assign out = ((q[7] ^ q[5]) ^ q[4]) ^ q[3];
+    assign out = q[0];
 
 endmodule

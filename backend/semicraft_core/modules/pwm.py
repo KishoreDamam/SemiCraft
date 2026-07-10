@@ -166,9 +166,12 @@ def generate(opts: PwmOptions) -> Module:
     params = [Param("RES", Const(opts.resolution), doc="Counter/duty width in bits")]
     if opts.duty_input == "param":
         params.append(
+            # Unsized default: parameter context renders a plain integer; a
+            # RES-wide replicate here trips Verilator WIDTHEXPAND against the
+            # 32-bit `int unsigned` parameter type.
             Param(
                 "DUTY",
-                Const((1 << opts.resolution) // 2, width=Ref("RES")),
+                Const((1 << opts.resolution) // 2),
                 doc="Fixed duty-cycle threshold (default 50%)",
             )
         )

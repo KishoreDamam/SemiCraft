@@ -202,12 +202,12 @@ def test_default_first_no_latch_pattern() -> None:
     assert "// default: hold current state (no-latch guarantee)" in code
 
 
-def test_full_coverage_no_default_arm() -> None:
+def test_empty_default_arm_present() -> None:
     code = generate("fsm", {}).code
-    # Full enum coverage -> no default case arm needed (IR_SPEC §6 rule 5).
-    # (The word "default" appears in a hold comment; check for an actual arm.)
-    arm_lines = [ln.strip() for ln in code.splitlines() if ln.strip().startswith("default")]
-    assert not any(ln.startswith("default:") and "//" not in ln for ln in arm_lines)
+    # The state vector can hold encodings outside the enum (3 states in 2
+    # bits), so each case carries an empty default arm to satisfy Verilator's
+    # CASEINCOMPLETE; behavior comes from the pre-case default assignments.
+    assert "default: ;" in code
 
 
 def test_five_state_fsm() -> None:

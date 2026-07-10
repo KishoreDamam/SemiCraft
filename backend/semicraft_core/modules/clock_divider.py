@@ -216,12 +216,15 @@ def generate(opts: ClockDividerOptions) -> Module:
         body=body,
     )
 
+    # The division ratio is baked into the counter comparison constants, so
+    # DIV is not emitted as a parameter (an unreferenced param trips
+    # Verilator's UNUSEDPARAM under -Wall); the ratio is documented in the
+    # header and doc file.
     params = [
-        Param("DIV", Const(opts.divide_by), doc="Division ratio"),
         Param(
             "CNT_WIDTH",
             Const(_cnt_width(opts)),
-            doc="Divide counter width (clog2(DIV))",
+            doc=f"Divide counter width (clog2 of divide ratio {opts.divide_by})",
         ),
     ]
 

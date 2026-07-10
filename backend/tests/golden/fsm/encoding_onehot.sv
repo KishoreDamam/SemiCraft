@@ -41,6 +41,7 @@ module fsm (
             done: begin
                 // TODO: transition logic for done
             end
+            default: ;
         endcase
     end
 

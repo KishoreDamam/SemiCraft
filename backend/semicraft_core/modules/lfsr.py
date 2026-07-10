@@ -264,14 +264,18 @@ def generate(opts: LfsrOptions) -> Module:
 
     items: list = [*extra_items, always]
     if opts.output_style == "serial":
-        # 'out' is a pure combinational tap of the current state (the bit
-        # about to be fed back into the MSB on the next active edge), not a
-        # separate register, so it is a continuous assignment.
-        items.append(ContAssign(Ref("out"), feedback))
+        # 'out' taps q[0] — the bit shifting out of the register this cycle
+        # (the conventional LFSR serial output). It also keeps every bit of q
+        # read in serial mode: the shift slice covers q[WIDTH-1:1] and the
+        # taps read interior bits, so tapping q[0] here avoids Verilator's
+        # UNUSEDSIGNAL on the otherwise-unread LSB.
+        items.append(ContAssign(Ref("out"), Bit(Ref("q"), Const(0))))
 
     params = [
         Param("WIDTH", Const(opts.width), doc="Register width in bits"),
-        Param("INIT", Const(opts.init_value, width=Ref("WIDTH")), doc="Reset seed value"),
+        # Unsized default: renders as a plain integer in parameter context; a
+        # WIDTH-wide replicate trips Verilator WIDTHEXPAND on the 32-bit param.
+        Param("INIT", Const(opts.init_value), doc="Reset seed value"),
     ]
 
     return Module(

@@ -6,7 +6,6 @@
 // commercial and non-commercial use at the user's own risk.
 
 module clock_divider #(
-    parameter DIV = 100,
     parameter CNT_WIDTH = 7
 ) (
     input  wire clk,      // Input clock

@@ -46,6 +46,7 @@ module fsm (
                 // TODO: transition logic for done
                 // TODO: Mealy outputs for this state belong here
             end
+            default: ;
         endcase
     end
 

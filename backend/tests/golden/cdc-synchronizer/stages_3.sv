@@ -11,7 +11,6 @@ module cdc_synchronizer (
     output logic q          // Synchronized output, 3 clk cycles behind d_async
 );
 
-    localparam int unsigned STAGES = 3;
     logic sync_ff1;  // Synchronizer stage 1
     logic sync_ff2;  // Synchronizer stage 2
 

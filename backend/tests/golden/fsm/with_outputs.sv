@@ -43,6 +43,7 @@ module fsm (
             done: begin
                 // TODO: transition logic for done
             end
+            default: ;
         endcase
     end
 
@@ -61,6 +62,7 @@ module fsm (
             done: begin
                 // TODO: Moore outputs for state done
             end
+            default: ;
         endcase
     end
 

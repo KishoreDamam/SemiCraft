@@ -6,7 +6,6 @@
 // commercial and non-commercial use at the user's own risk.
 
 module clock_divider #(
-    parameter int unsigned DIV = 1024,
     parameter int unsigned CNT_WIDTH = 10
 ) (
     input  logic clk,      // Input clock
