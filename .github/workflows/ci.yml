@@ -35,12 +35,20 @@ jobs:
         run: uv run pytest
 
   lint-gate:
-    name: golden lint gate (verilator)
+    name: golden lint + tb-compile gate (verilator)
     runs-on: ubuntu-latest
     # WP-04 lands the lint wrapper + its own test suite (backend/tests/lint),
     # which is a hard gate below (no continue-on-error). The golden-file lint
-    # regression (WP-08) is landing in parallel and may not have tests yet,
-    # so that step alone keeps continue-on-error until WP-08 confirms green.
+    # regression (WP-08) has been green since it landed, so that step is now
+    # a hard gate too (P2-14 removed its continue-on-error).
+    #
+    # P2-14 adds the tb-compile step: every committed golden TB (P2-13's
+    # smoke-TB generator, `*_tb.sv` under backend/tests/golden/**) is compiled
+    # (not run) with `verilator --timing --binary`. Runs in the same job,
+    # after the lint gate, to reuse the one Verilator install and keep total
+    # CI time down. Until P2-13 lands and doc/tb goldens are regenerated +
+    # committed, test_tb_compile.py collects zero cases and is a no-op — the
+    # step still passes.
     steps:
       - uses: actions/checkout@v4
       - name: Install uv
@@ -56,10 +64,11 @@ jobs:
       - name: Run lint module tests (incl. verilator integration test)
         run: uv run pytest backend/tests/lint -m ""
       - name: Run golden lint gate
-        continue-on-error: true
         run: |
           if [ -d backend/tests/golden ] && find backend/tests/golden -name 'test_*.py' | grep -q .; then
             uv run pytest backend/tests/golden -k lint
           else
             echo "No golden lint tests yet (WP-08 pending) — skipping."
           fi
+      - name: Run golden TB compile gate (P2-14)
+        run: uv run pytest backend/tests/golden/test_tb_compile.py -v

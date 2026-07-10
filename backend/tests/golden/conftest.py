@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+from semicraft_core.snippets import registry
 
 GOLDEN_ROOT = Path(__file__).parent
 
@@ -50,10 +51,34 @@ class GoldenCase:
     options: dict
     language: str  # "sv" | "verilog" — always resolved, even if the case omitted it
     snapshot_name: str  # e.g. "defaults.sv" — filename within tests/golden/<id>/
+    kind: str = "snippet"  # registry.item_kind(item): "snippet" | "module" (P2-14)
 
     @property
     def snapshot_path(self) -> Path:
         return GOLDEN_ROOT / self.snippet_id / self.snapshot_name
+
+    @property
+    def doc_snapshot_path(self) -> Path:
+        """Golden path for the module ``doc`` file (P2-14, generate_files()).
+
+        Language-qualified (``<case>.<sv|v>.md``) because doc text embeds the
+        per-request ``config_hash``, which differs between the sv/verilog
+        variants of an otherwise-identical case — the same reason the rtl
+        snapshot names already carry the extension.
+        """
+        return GOLDEN_ROOT / self.snippet_id / f"{self.case_name}.{_extension(self.language)}.md"
+
+    @property
+    def tb_snapshot_path(self) -> Path:
+        """Golden path for the module ``tb`` file (P2-14, generate_files(), P2-13).
+
+        Language-qualified for the same config_hash reason as
+        :attr:`doc_snapshot_path`; kept as a real ``.sv`` file (smoke TBs are
+        SystemVerilog regardless of the DUT rtl language) so
+        ``test_tb_compile.py`` can glob ``*_tb.sv`` and feed it to Verilator
+        directly.
+        """
+        return GOLDEN_ROOT / self.snippet_id / f"{self.case_name}.{_extension(self.language)}_tb.sv"
 
     @property
     def resolved_options(self) -> dict:
@@ -98,6 +123,15 @@ def discover_golden_cases() -> list[GoldenCase]:
         snippet_id = snippet_dir.name
         module = _load_cases_module(snippet_dir)
         cases: dict[str, dict] = getattr(module, "CASES", {})
+        # registry.item_kind() (Appendix A.2) — "module" items additionally get
+        # doc/tb files from generate_files() (P2-14); "snippet" items stay
+        # rtl-only. Looked up once per snippet dir, not per case.
+        try:
+            kind = registry.item_kind(registry.get(snippet_id))
+        except KeyError:
+            # Shouldn't happen (every golden dir name is a registered catalog
+            # id) but degrade to "snippet" rather than blow up collection.
+            kind = "snippet"
         for case_name, options in cases.items():
             pinned_language = options.get("language")
             languages = [pinned_language] if pinned_language else ["sv", "verilog"]
@@ -110,6 +144,7 @@ def discover_golden_cases() -> list[GoldenCase]:
                         options=options,
                         language=language,
                         snapshot_name=f"{case_name}.{ext}",
+                        kind=kind,
                     )
                 )
     return results

@@ -1,0 +1,60 @@
+// SemiCraft v0.1.0
+// Testbench: edge_detector_tb (config hash: c50e77408e48)
+// Smoke testbench (stub, compile-checked only) for edge_detector
+//
+// Generated code is provided as-is, without warranty of any kind. Free for
+// commercial and non-commercial use at the user's own risk.
+
+`timescale 1ns/1ps
+
+module edge_detector_tb;
+    logic clk;
+    logic rst_n;
+    logic [7:0] d;
+    logic [7:0] pulse;
+
+    // Free-running clock
+    initial clk = 1'b0;
+    always #5 clk = ~clk;
+
+    // Device under test
+    edge_detector dut (
+        .clk   (clk),
+        .rst_n (rst_n),
+        .d     (d),
+        .pulse (pulse)
+    );
+
+    // Stimulus and self-checking assertions
+    initial begin
+        // Initialise inputs and assert reset
+        d = 8'd0;
+        rst_n = 1'd0;
+        repeat (2) @(posedge clk);
+        rst_n = 1'd1;
+        // Apply directed vectors; sample checks on the falling edge
+        @(negedge clk);
+        d = 8'd0;
+        @(negedge clk);
+        d = 8'd255;
+        @(negedge clk);
+        d = 8'd255;
+        #1;
+        if (pulse !== 8'd255) begin
+            $fatal(1, "SMOKE FAIL: pulse at cycle 2 expected 255, got %0d", pulse);
+        end
+        @(negedge clk);
+        d = 8'd0;
+        #1;
+        if (pulse !== 8'd0) begin
+            $fatal(1, "SMOKE FAIL: pulse at cycle 3 expected 0, got %0d", pulse);
+        end
+        @(negedge clk);
+        d = 8'd0;
+        @(negedge clk);
+        d = 8'd255;
+        $display("SMOKE PASS: edge_detector");
+        $finish;
+    end
+
+endmodule
