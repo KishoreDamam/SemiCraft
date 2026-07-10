@@ -51,7 +51,7 @@ Updated: 2026-07-04. Keep current — this file is the session-handoff state.
 | P2-06/07/08 debouncer+clock-divider+pwm | DONE, committed, pushed | 99 tests, 36 golden cases, snapshots generated; 1267 backend total |
 | P2-10 rr-arbiter | DONE, committed, pushed | 38 tests; two-pass mask scheme, sim-verified fairness |
 | P2-11/12 lfsr+gray-counter | DONE, committed, pushed | 85 tests; bit-sim-honest tb_specs; 1544 total green. All 7 planned modules now in catalog |
-| P2-13 smoke-TB generator | IN FLIGHT (opus) | owns semicraft_core/tb/ + docs/TB_SPEC.md + generate.py EMIT_TB flip + tests/tb/. TB file convention: <module>_tb.sv kind "tb", SV-only. Recovery: verify structural sweep passes, commit |
-| P2-14 golden TB + CI gate | IN FLIGHT (sonnet) | owns tests/golden/ extensions + test_tb_compile.py + ci.yml. Built to no-op if P2-13 absent. Recovery: verify golden suite green, commit |
-| P2-15 release v0.2.0 | after both + orchestrator runs --update-golden (tb+doc snapshots) + CI green check | P2-09 id folded into P2-10..12 (edge-detector was done in P2-04) |
+| P2-13 smoke-TB generator | DONE, committed 0c002b0, pushed | agent cut at limit ~95% done; orchestrator finished inline (wiring, EMIT_TB flip, tests/tb/, TB_SPEC.md). Name-map-consistent SV TBs for all 7 modules |
+| P2-14 golden TB + CI gate | DONE, committed b64cf5f, pushed | tb+doc snapshots per case (<case>.sv_tb.sv / .sv.md); verilator --binary compile gate in CI. 2282 tests green |
+| P2-15 release v0.2.0 | NEXT: confirm CI green on b64cf5f (first real TB compile gate run), then release checklist update + tag | P2-09 folded into P2-10..12 |
 | P2-05..15 | queued per plan | 2-agent budget per session (user constraint) |
