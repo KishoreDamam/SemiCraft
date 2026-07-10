@@ -1,0 +1,28 @@
+// SemiCraft v0.1.0
+// Snippet: lfsr (config hash: ab867d632250)
+// 4-bit Fibonacci LFSR, parallel output
+//
+// Generated code is provided as-is, without warranty of any kind. Free for
+// commercial and non-commercial use at the user's own risk.
+
+module lfsr #(
+    parameter int unsigned WIDTH = 4,
+    parameter int unsigned INIT = {{(WIDTH-1){1'b0}}, 1'b1}
+) (
+    input  logic             clk,     // Clock
+    input  logic             rst_n,   // Sync reset, active-low
+    input  logic             en,      // Shift enable (holds when low)
+    output logic [WIDTH-1:0] q        // LFSR register state
+);
+
+    always_ff @(posedge clk) begin
+        if (!rst_n) begin
+            q <= INIT;
+        end else begin
+            if (en) begin
+                q <= {(q[3] ^ q[2]), q[WIDTH-1:1]};
+            end
+        end
+    end
+
+endmodule
