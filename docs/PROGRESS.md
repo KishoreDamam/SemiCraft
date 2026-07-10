@@ -49,5 +49,7 @@ Updated: 2026-07-04. Keep current — this file is the session-handoff state.
 | P2-05a API v2 backend | DONE, committed e45f455, pushed | 14 tests; catalog+generate+deterministic zip; v1 regression-guarded |
 | P2-05b frontend v2 UI | DONE, committed 53a35c1, pushed | full v2 migration single path; CatalogPicker kind groups + beta badges; FileTabs; zip download; 163 frontend tests |
 | P2-06/07/08 debouncer+clock-divider+pwm | DONE, committed, pushed | 99 tests, 36 golden cases, snapshots generated; 1267 backend total |
-| NEXT after | P2-09..12 (arbiter opus, lfsr+gray sonnet), P2-13 smoke-TB (opus), P2-14 CI, P2-15 release | |
+| P2-10 rr-arbiter | IN FLIGHT (opus) | owns modules/rr_arbiter.py + tests + cases + taxonomy-list add. Recovery: verify, --update-golden, commit |
+| P2-11/12 lfsr+gray-counter | IN FLIGHT (sonnet, one agent) | owns modules/{lfsr,gray_counter}.py + tests + cases + taxonomy-list adds. Recovery: same |
+| NEXT after | P2-13 smoke-TB generator (opus), P2-14 CI extension (sonnet), P2-15 release v0.2.0 | note: P2-09 id folded into P2-10..12 batch (7 planned modules → edge-detector done in P2-04, so 6 remained) |
 | P2-05..15 | queued per plan | 2-agent budget per session (user constraint) |
