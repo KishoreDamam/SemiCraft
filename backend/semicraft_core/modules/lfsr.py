@@ -258,7 +258,14 @@ def generate(opts: LfsrOptions) -> Module:
     always = AlwaysFF(
         clock=ClockSpec("clk"),
         reset=reset,
-        reset_body=[Assign(Ref("q"), Ref("INIT"))],
+        # Slice the 32-bit parameter to the register width — a bare INIT ref
+        # trips Verilator WIDTHTRUNC on the assignment.
+        reset_body=[
+            Assign(
+                Ref("q"),
+                Slice(Ref("INIT"), BinOp(BinOpKind.SUB, Ref("WIDTH"), Const(1)), Const(0)),
+            )
+        ],
         body=body,
     )
 

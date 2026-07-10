@@ -55,6 +55,7 @@ from ..ir.nodes import (
     ResetKind,
     ResetSpec,
     Signal,
+    Slice,
     UnaryOp,
     UnaryOpKind,
 )
@@ -157,7 +158,13 @@ def generate(opts: PwmOptions) -> Module:
         body=body,
     )
 
-    duty_ref = Ref("duty") if opts.duty_input == "port" else Ref("DUTY")
+    # Param case slices the 32-bit DUTY down to the counter width — comparing
+    # against the bare param trips Verilator WIDTHEXPAND on cnt.
+    duty_ref = (
+        Ref("duty")
+        if opts.duty_input == "port"
+        else Slice(Ref("DUTY"), BinOp(BinOpKind.SUB, Ref("RES"), Const(1)), Const(0))
+    )
     compare = BinOp(BinOpKind.LT, Ref("cnt"), duty_ref)
     pwm_expr = UnaryOp(UnaryOpKind.NOT_LOGICAL, compare) if opts.invert_output else compare
 

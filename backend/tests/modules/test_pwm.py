@@ -64,7 +64,7 @@ def test_duty_input_port_adds_duty_port() -> None:
 def test_duty_input_param_no_duty_port_but_has_duty_param() -> None:
     code = generate("pwm", {"duty_input": "param"}).code
     assert "DUTY" in code
-    assert "assign pwm_out = cnt < DUTY;" in code
+    assert "assign pwm_out = cnt < DUTY[RES-1:0];" in code
     # no runtime duty port declared
     assert " duty," not in code and " duty;" not in code and " duty)" not in code
 

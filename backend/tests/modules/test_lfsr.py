@@ -138,7 +138,7 @@ def test_reset_variants(reset_style: str, reset_polarity: str) -> None:
     else:
         assert "always_ff @(posedge clk) begin" in code
     # reset always loads INIT, never a bare zero constant for q
-    assert "q <= INIT;" in code
+    assert "q <= INIT[WIDTH-1:0];" in code
 
 
 # --------------------------------------------------------------------------- #

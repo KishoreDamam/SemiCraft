@@ -24,6 +24,6 @@ module pwm #(
         end
     end
 
-    assign pwm_out = !(cnt < DUTY);
+    assign pwm_out = !(cnt < DUTY[RES-1:0]);
 
 endmodule

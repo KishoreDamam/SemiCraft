@@ -19,7 +19,7 @@ module lfsr #(
 
     always @(posedge clk) begin
         if (!rst_n) begin
-            q <= INIT;
+            q <= INIT[WIDTH-1:0];
         end else begin
             if (en) begin
                 q <= {(((q[15] ^ q[14]) ^ q[12]) ^ q[3]), q[WIDTH-1:1]};
