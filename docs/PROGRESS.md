@@ -53,5 +53,5 @@ Updated: 2026-07-04. Keep current — this file is the session-handoff state.
 | P2-11/12 lfsr+gray-counter | DONE, committed, pushed | 85 tests; bit-sim-honest tb_specs; 1544 total green. All 7 planned modules now in catalog |
 | P2-13 smoke-TB generator | DONE, committed 0c002b0, pushed | agent cut at limit ~95% done; orchestrator finished inline (wiring, EMIT_TB flip, tests/tb/, TB_SPEC.md). Name-map-consistent SV TBs for all 7 modules |
 | P2-14 golden TB + CI gate | DONE, committed b64cf5f, pushed | tb+doc snapshots per case (<case>.sv_tb.sv / .sv.md); verilator --binary compile gate in CI. 2282 tests green |
-| P2-15 release v0.2.0 | NEXT: confirm CI green on b64cf5f (first real TB compile gate run), then release checklist update + tag | P2-09 folded into P2-10..12 |
+| P2-15 release v0.2.0 | DONE — CI green on b2bf088 (all gates incl. enforcing lint + TB compile), v0.2.0 tagged | Phase 2 COMPLETE. Next: Phase 3 per PLAN-semicraft-phases-2-8.md (P3-01 TB node family first) |
 | P2-05..15 | queued per plan | 2-agent budget per session (user constraint) |

@@ -39,3 +39,31 @@ Verified 2026-07-04 against PRD §11 MVP release criteria.
 
 - CI (ruff + pytest + Verilator lint-gate) green at 2c7b2a7; wave-6 commit
   cc5e50d in progress at checklist time — confirm green before announcing.
+
+---
+
+# SemiCraft v0.2.0 — Phase 2 Release
+
+Verified 2026-07-11 against the Phase 2 exit criteria
+(docs/PLAN-semicraft-phases-2-8.md).
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| 7 modules, both languages | PASS | edge-detector, debouncer, clock-divider, pwm, rr-arbiter, lfsr, gray-counter |
+| Each module ships a smoke TB compiling under Verilator in CI | PASS | tb-compile gate green on b2bf088 (verilator --timing --binary per golden TB) |
+| Golden-locked | PASS | rtl + tb + doc snapshots per case, byte-exact, determinism-checked |
+| Catalog-filterable | PASS | kind/maturity taxonomy; /api/v2/catalog; UI groups Snippets/Modules |
+| Zip-downloadable | PASS | /api/v2/generate/zip, byte-deterministic archives |
+| Lint-clean guarantee upgraded | PASS | golden lint gate now enforcing (continue-on-error removed); all RTL passes verilator --lint-only -Wall |
+
+Phase 2 additions: IR v0.2 (GenFor, Memory, enum-typed DataType, validation
+rules 8–11), API v2 multi-file contract, ModuleDef/TbSpec contracts, TB stub
+node family (docs/TB_SPEC.md), schema-driven multi-file frontend (file tabs,
+zip download, maturity badges).
+
+Quality notes: the enforcing lint gate exposed and fixed four generator bug
+classes (unused parameters, parameter-default width mismatches, incomplete
+case coverage, unread LSB in LFSR serial mode); TB idle-cycle coalescing
+fixed a 65k-line pathological testbench.
+
+Test counts at tag: 2282 backend + 163 frontend, CI green end to end.
