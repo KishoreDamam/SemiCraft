@@ -210,9 +210,20 @@ def generate_tb(module_def, opts, rtl_module: Module) -> str:
 
     if n_cycles:
         stmts.append(TbComment("Apply directed vectors; sample checks on the falling edge"))
+    # Coalesce runs of idle cycles (no drives, no checks) into a single
+    # `repeat (N) @(negedge clk);` — a per-cycle statement is unreadable and
+    # explodes compile time for cycle counts in the tens of thousands
+    # (clock-divider at divide_by=65536 produced a 65k-line TB that timed out
+    # the CI compile gate).
+    pending_waits = 0
     for c in range(n_cycles):
-        stmts.append(WaitCycles(1, "negedge"))
-        if c < len(spec.vectors):
+        pending_waits += 1
+        has_drives = c < len(spec.vectors) and bool(spec.vectors[c])
+        if not has_drives and c not in checks_by_cycle:
+            continue
+        stmts.append(WaitCycles(pending_waits, "negedge"))
+        pending_waits = 0
+        if has_drives:
             for sig in sorted(spec.vectors[c]):
                 w = width_of.get(sig, 1)
                 stmts.append(DriveSignal(styled(sig), spec.vectors[c][sig], w))

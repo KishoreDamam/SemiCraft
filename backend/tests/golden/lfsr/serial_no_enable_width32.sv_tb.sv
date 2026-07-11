@@ -35,12 +35,7 @@ module lfsr_tb;
         if (out !== 1'd1) begin
             $fatal(1, "SMOKE FAIL: out at cycle 0 expected 1, got %0d", out);
         end
-        @(negedge clk);
-        @(negedge clk);
-        @(negedge clk);
-        @(negedge clk);
-        @(negedge clk);
-        @(negedge clk);
+        repeat (6) @(negedge clk);
         #1;
         if (out !== 1'd1) begin
             $fatal(1, "SMOKE FAIL: out at cycle 6 expected 1, got %0d", out);

@@ -40,9 +40,6 @@ module pwm_tb;
         if (pwm_out !== 1'd0) begin
             $fatal(1, "SMOKE FAIL: pwm_out at cycle 1 expected 0, got %0d", pwm_out);
         end
-        @(negedge clk);
-        @(negedge clk);
-        @(negedge clk);
         $display("SMOKE PASS: pwm");
         $finish;
     end

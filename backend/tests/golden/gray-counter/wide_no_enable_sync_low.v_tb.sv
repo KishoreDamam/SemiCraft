@@ -35,12 +35,7 @@ module gray_counter_tb;
         if (gray !== 24'd0) begin
             $fatal(1, "SMOKE FAIL: gray at cycle 0 expected 0, got %0d", gray);
         end
-        @(negedge clk);
-        @(negedge clk);
-        @(negedge clk);
-        @(negedge clk);
-        @(negedge clk);
-        @(negedge clk);
+        repeat (6) @(negedge clk);
         #1;
         if (gray !== 24'd5) begin
             $fatal(1, "SMOKE FAIL: gray at cycle 6 expected 5, got %0d", gray);
