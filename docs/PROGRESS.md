@@ -55,3 +55,11 @@ Updated: 2026-07-04. Keep current — this file is the session-handoff state.
 | P2-14 golden TB + CI gate | DONE, committed b64cf5f, pushed | tb+doc snapshots per case (<case>.sv_tb.sv / .sv.md); verilator --binary compile gate in CI. 2282 tests green |
 | P2-15 release v0.2.0 | DONE — CI green on b2bf088 (all gates incl. enforcing lint + TB compile), v0.2.0 tagged | Phase 2 COMPLETE. Next: Phase 3 per PLAN-semicraft-phases-2-8.md (P3-01 TB node family first) |
 | P2-05..15 | queued per plan | 2-agent budget per session (user constraint) |
+
+## Phase 3 (started 2026-07-11)
+
+| WP | Status | Notes |
+|---|---|---|
+| P3-01 TB node family | IN FLIGHT (opus) | owns tb/nodes.py + tb/validate.py + TB_SPEC v2 + tests/tb/test_v2_*. Constraint: P2 golden TBs must stay byte-identical. Recovery: verify goldens untouched + suite green, commit |
+| P3-03a sim runner + run gate | IN FLIGHT (sonnet) | owns sim/ pkg + tests/sim + tests/golden/test_tb_run.py + ci.yml. Run gate advisory (continue-on-error) until check values proven; compile gate stays enforcing. Recovery: verify mocked tests, commit; then WATCH CI run-gate log for wrong tb_spec expected values — fixing those is the follow-up WP |
+| Next | P3-02 TB renderers (opus), tb_spec value fixes if run gate reveals any, then P3-04 directed-TB generator | 2-agent budget per session |
