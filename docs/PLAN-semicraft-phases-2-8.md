@@ -248,11 +248,11 @@ output). MVP-era principle stands: AI never becomes the source of truth.
 
 - One phase active at a time; inside a phase, waves like Phase 1 (contract WP
   first, then parallel fan-out, then integration/release WP).
-- Model tiering: two tiers only — opus for contracts, IR/renderer work,
-  protocol IPs, and anything whose errors poison downstream WPs (P2-03,
-  P3-01/02, P4-02, P5-01, P6-03 get an extra review pass in lieu of a higher
-  tier); sonnet for pattern work against references. Fable is NOT used for
-  any WP (user decision).
+- Model tiering: opus for contracts, IR/renderer work, protocol IPs, and
+  judgment; sonnet for pattern work against references. Fable is reserved for
+  the most complex poison-downstream WPs (P3-02 TB renderers, P4-02 AXI-Lite
+  regblock, P5-01 subsystem contract, P6-03 mapping engine) — user decision
+  2026-07-11, superseding the earlier full ban.
 - Escalation rule stands: sonnet stuck twice → re-dispatch opus.
 - Each phase ends by updating PROGRESS.md, RELEASE_CHECKLIST-style gate vs the
   PRD §11 post-MVP criteria, tag, push.
