@@ -72,13 +72,9 @@ jobs:
           fi
       - name: Run golden TB compile gate (P2-14)
         run: uv run pytest backend/tests/golden/test_tb_compile.py -v
-      - name: Run golden TB run gate (P3-03a, advisory until check-value fixes land)
-        # First-ever execution of these TBs (previously compile-checked only,
-        # P2-14). May surface genuine check-value bugs (wrong expected value,
-        # or a check sampling before reset deassertion) that compilation
-        # can't catch — continue-on-error keeps CI green while those get
-        # fixed. Flip to enforcing in a follow-up once this step is green
-        # (see docs/PLAN-semicraft-phases-2-8.md Phase 3, P3-09). The compile
-        # gate above stays a hard gate throughout.
-        continue-on-error: true
+      - name: Run golden TB run gate (P3-03a, enforcing)
+        # Executes each module's defaults smoke TB (SEMICRAFT_TB_RUN_ALL=1
+        # for the full matrix). Went enforcing after the first advisory run
+        # passed 14/14 (the one check-value bug it found — clock-divider
+        # toggle sampling — was fixed at 71a4c01).
         run: uv run pytest backend/tests/golden/test_tb_run.py -v

@@ -62,4 +62,5 @@ Updated: 2026-07-04. Keep current — this file is the session-handoff state.
 |---|---|---|
 | P3-01 TB node family | DONE, committed b16cffd, pushed | 70 tests; full family + validate_tb T1-T8; goldens byte-identical; TB_SPEC v2 |
 | P3-03a sim runner + run gate | DONE, committed 1adb9cf, pushed | 10 mocked tests; advisory run gate in CI — CHECK ITS LOG for tb_spec value failures (follow-up WP) |
-| Next | P3-02 TB renderers (FABLE — policy allows for poison-downstream WPs) + tb_spec value fixes per run-gate log, then P3-04 | 2-agent budget per session |
+| run-gate first execution | DONE — 12/14 cold pass; clock-divider check-timing bug fixed (71a4c01); gate now ENFORCING | timing model recorded in clock_divider.py: at TB cycle c, c-1 post-reset edges elapsed |
+| Next | P3-02 TB renderers (FABLE) + P3-05 SVA assertion generator (opus) parallel candidates | 2-agent budget per session |
