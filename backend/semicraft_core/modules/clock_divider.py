@@ -291,8 +291,12 @@ def tb_spec(opts: ClockDividerOptions) -> TbSpec:
     checks: list[Check] = []
     if opts.output_enable_style == "toggle":
         half = opts.divide_by // 2
-        # clk_out starts at 0 (reset value) and toggles to 1 after half cycles.
-        checks.append(Check(cycle=half, signal="clk_out", expected=1))
+        # Observed sim timing (first CI run-gate execution): at TB cycle c,
+        # c-1 post-reset rising edges have elapsed, so clk_out = ((c-1)//half)
+        # % 2. Cycle 1 is therefore always still 0, and the first flip is
+        # visible at cycle half+1 (checking at cycle=half collided with the
+        # zero check for divide_by=2 and sampled one edge too early).
+        checks.append(Check(cycle=half + 1, signal="clk_out", expected=1))
         checks.append(Check(cycle=1, signal="clk_out", expected=0))
     else:
         # clk_out is 0 except on the single wrap cycle each period.

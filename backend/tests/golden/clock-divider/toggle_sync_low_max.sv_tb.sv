@@ -35,10 +35,10 @@ module clock_divider_tb;
         if (clk_out !== 1'd0) begin
             $fatal(1, "SMOKE FAIL: clk_out at cycle 1 expected 0, got %0d", clk_out);
         end
-        repeat (32767) @(negedge clk);
+        repeat (32768) @(negedge clk);
         #1;
         if (clk_out !== 1'd1) begin
-            $fatal(1, "SMOKE FAIL: clk_out at cycle 32768 expected 1, got %0d", clk_out);
+            $fatal(1, "SMOKE FAIL: clk_out at cycle 32769 expected 1, got %0d", clk_out);
         end
         $display("SMOKE PASS: clock_divider");
         $finish;
