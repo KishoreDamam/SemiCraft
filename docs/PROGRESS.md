@@ -60,6 +60,6 @@ Updated: 2026-07-04. Keep current — this file is the session-handoff state.
 
 | WP | Status | Notes |
 |---|---|---|
-| P3-01 TB node family | IN FLIGHT (opus) | owns tb/nodes.py + tb/validate.py + TB_SPEC v2 + tests/tb/test_v2_*. Constraint: P2 golden TBs must stay byte-identical. Recovery: verify goldens untouched + suite green, commit |
-| P3-03a sim runner + run gate | IN FLIGHT (sonnet) | owns sim/ pkg + tests/sim + tests/golden/test_tb_run.py + ci.yml. Run gate advisory (continue-on-error) until check values proven; compile gate stays enforcing. Recovery: verify mocked tests, commit; then WATCH CI run-gate log for wrong tb_spec expected values — fixing those is the follow-up WP |
-| Next | P3-02 TB renderers (opus), tb_spec value fixes if run gate reveals any, then P3-04 directed-TB generator | 2-agent budget per session |
+| P3-01 TB node family | DONE, committed b16cffd, pushed | 70 tests; full family + validate_tb T1-T8; goldens byte-identical; TB_SPEC v2 |
+| P3-03a sim runner + run gate | DONE, committed 1adb9cf, pushed | 10 mocked tests; advisory run gate in CI — CHECK ITS LOG for tb_spec value failures (follow-up WP) |
+| Next | P3-02 TB renderers (FABLE — policy allows for poison-downstream WPs) + tb_spec value fixes per run-gate log, then P3-04 | 2-agent budget per session |
