@@ -18,32 +18,54 @@ text out (release criterion §1). The output shape is fixed:
 
         <DUT instance>
 
+        <reset sequence process>        // only when TbModule.reset_seq is set
+
+        <task declarations>             // only when TbModule.tasks is non-empty
+
         initial begin
             <stimulus + self-checking assertions>
         end
+
+        <concurrent SVA assertions>     // only when TbModule.asserts is non-empty
     endmodule
+
+The P3-01 optional sections (reset_seq / tasks / asserts) are omitted entirely
+when absent, so P2 smoke constructions render byte-identically to before.
 """
 
 from __future__ import annotations
 
 from .nodes import (
+    AssertProperty,
+    CallTask,
     ClockGen,
     Decl,
     Delay,
     Display,
     DriveSignal,
+    Dump,
     DutInstance,
     ExpectSignal,
     Finish,
+    ForkJoin,
+    IfTb,
     Initial,
+    RepeatBlock,
+    ResetSeq,
     Stmt,
+    Task,
     TbComment,
     TbModule,
+    TimeoutGuard,
     WaitCycles,
+    WaitUntil,
 )
 
 _INDENT = "    "
 _CLOCK_NAME = "clk"  # the styled clock net; drives WaitCycles edge expressions
+
+# ForkJoin.join discipline -> SystemVerilog join keyword (TB_SPEC §3.1).
+_JOIN_KEYWORD = {"all": "join", "any": "join_any", "none": "join_none"}
 
 
 def _lit(value: int, width: int) -> str:
@@ -102,7 +124,17 @@ def _emit_dut(w: _Writer, dut: DutInstance) -> None:
     w.line(");")
 
 
-def _emit_stmt(w: _Writer, s: Stmt) -> None:
+def _emit_block(w: _Writer, stmts: tuple[Stmt, ...], scope: str) -> None:
+    """Emit ``stmts`` one indent level deeper (the body of a begin/end block)."""
+    w.indent()
+    for s in stmts:
+        _emit_stmt(w, s, scope)
+    w.dedent()
+
+
+def _emit_stmt(w: _Writer, s: Stmt, scope: str) -> None:
+    """Emit one statement. ``scope`` is the enclosing TB module name (the
+    ``$dumpvars`` scope for :class:`Dump`)."""
     if isinstance(s, TbComment):
         w.line(f"// {s.text}")
     elif isinstance(s, DriveSignal):
@@ -127,17 +159,86 @@ def _emit_stmt(w: _Writer, s: Stmt) -> None:
         w.line(f'$display("{s.message}");')
     elif isinstance(s, Finish):
         w.line("$finish;")
+    elif isinstance(s, WaitUntil):
+        w.line(f"wait ({s.condition_text});")
+    elif isinstance(s, ForkJoin):
+        w.line("fork")
+        w.indent()
+        for branch in s.branches:
+            w.line("begin")
+            _emit_block(w, branch, scope)
+            w.line("end")
+        w.dedent()
+        w.line(_JOIN_KEYWORD[s.join])
+    elif isinstance(s, RepeatBlock):
+        w.line(f"repeat ({s.count}) begin")
+        _emit_block(w, s.stmts, scope)
+        w.line("end")
+    elif isinstance(s, IfTb):
+        w.line(f"if ({s.condition_text}) begin")
+        _emit_block(w, s.then, scope)
+        if s.else_ is None:
+            w.line("end")
+        else:
+            w.line("end else begin")
+            _emit_block(w, s.else_, scope)
+            w.line("end")
+    elif isinstance(s, TimeoutGuard):
+        # Forked watchdog: a hung DUT fails loudly instead of stalling the sim.
+        w.line("fork")
+        w.indent()
+        w.line("begin")
+        w.indent()
+        w.line(f"repeat ({s.cycles}) @(posedge {_CLOCK_NAME});")
+        w.line(f'$fatal(1, "{s.message}");')
+        w.dedent()
+        w.line("end")
+        w.dedent()
+        w.line("join_none")
+    elif isinstance(s, Dump):
+        w.line(f'$dumpfile("{s.file}");')
+        w.line(f"$dumpvars({s.levels}, {scope});")
+    elif isinstance(s, CallTask):
+        w.line(f"{s.name}();")
     else:  # pragma: no cover - exhaustive over the Stmt union
         raise TypeError(f"unrenderable TB statement: {s!r}")
 
 
-def _emit_initial(w: _Writer, initial: Initial) -> None:
-    w.line("// Stimulus and self-checking assertions")
+def _emit_reset_seq(w: _Writer, rs: ResetSeq, clock: str) -> None:
+    """Declarative reset process: assert at time 0, hold, deassert."""
+    assert_level = 0 if rs.active_low else 1
+    deassert_level = 1 - assert_level
+    w.line("// Reset sequence")
     w.line("initial begin")
     w.indent()
-    for s in initial.stmts:
-        _emit_stmt(w, s)
+    w.line(f"{rs.signal} = {_lit(assert_level, 1)};")
+    if rs.cycles == 1:
+        w.line(f"@(posedge {clock});")
+    else:
+        w.line(f"repeat ({rs.cycles}) @(posedge {clock});")
+    w.line(f"{rs.signal} = {_lit(deassert_level, 1)};")
     w.dedent()
+    w.line("end")
+
+
+def _emit_task(w: _Writer, task: Task, scope: str) -> None:
+    w.line(f"task {task.name};")
+    _emit_block(w, task.stmts, scope)
+    w.line("endtask")
+
+
+def _emit_assert(w: _Writer, a: AssertProperty) -> None:
+    guard = f"disable iff ({a.disable_iff}) " if a.disable_iff is not None else ""
+    w.line(f"{a.name}: assert property (@(posedge {a.clock}) {guard}{a.property_text})")
+    w.indent()
+    w.line(f'else $fatal(1, "SVA FAIL: {a.name}");')
+    w.dedent()
+
+
+def _emit_initial(w: _Writer, initial: Initial, scope: str) -> None:
+    w.line("// Stimulus and self-checking assertions")
+    w.line("initial begin")
+    _emit_block(w, initial.stmts, scope)
     w.line("end")
 
 
@@ -157,8 +258,19 @@ def render_tb(tb: TbModule) -> str:
     _emit_clock(w, tb.clock)
     w.blank()
     _emit_dut(w, tb.dut)
+    if tb.reset_seq is not None:
+        w.blank()
+        _emit_reset_seq(w, tb.reset_seq, tb.clock.signal)
+    for task in tb.tasks:
+        w.blank()
+        _emit_task(w, task, tb.name)
     w.blank()
-    _emit_initial(w, tb.initial)
+    _emit_initial(w, tb.initial, tb.name)
+    if tb.asserts:
+        w.blank()
+        w.line("// Concurrent assertions (SVA)")
+        for a in tb.asserts:
+            _emit_assert(w, a)
     w.dedent()
     w.blank()
     w.line("endmodule")

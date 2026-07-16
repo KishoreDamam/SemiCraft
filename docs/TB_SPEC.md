@@ -1,16 +1,18 @@
 # SemiCraft Testbench IR Specification
 
-**Version 2 (Phase 3, P3-01).** Owner: verification core (`semicraft_core/tb/`).
+**Version 2.1 (Phase 3, P3-02).** Owner: verification core (`semicraft_core/tb/`).
 
 The testbench (TB) IR is a small, frozen-dataclass node family for directed
 **SystemVerilog** testbenches, entirely separate from the synthesizable IR
 (`semicraft_core/ir/`, see [IR_SPEC.md](IR_SPEC.md)). It began (P2-13) as a tiny
 "smoke" set — clock, reset, per-cycle drives, self-checking expects — that
-`generate_tb` still uses to emit compile-checked smoke testbenches. P3-01 extends
+`generate_tb` still uses to emit compile-checked smoke testbenches. P3-01 extended
 it into the full Phase 3 family (fork/join, loops, conditionals, timeout
-watchdog, waveform dump, reusable tasks, an SVA-property stub) and adds a
-validator (`validate_tb`). Renderers for the new nodes land with P3-02; only the
-P2 smoke subset is rendered today.
+watchdog, waveform dump, reusable tasks, an SVA-property stub) and added a
+validator (`validate_tb`). P3-02 landed the renderers: `render_tb` now renders
+**every** node in the family, and a sim-script emitter (`tb/scripts.py`)
+produces a deterministic `run.sh`/`Makefile` pair driving the same Verilator
+flow as the sim runner.
 
 The stable public seams are unchanged:
 `semicraft_core.tb.generate_tb(module_def, opts, rtl_module) -> str`,
@@ -19,6 +21,12 @@ The stable public seams are unchanged:
 
 ## Changelog
 
+- **v2.1 (P3-02):** renderers for the full node family — `_emit_stmt` handles
+  every `Stmt` (no longer raises on P3 nodes); module-level `Task`,
+  `AssertProperty`, and `ResetSeq` render as optional sections (omitted when
+  absent, keeping P2 goldens byte-identical). New `tb/scripts.py`
+  (`emit_run_script` / `emit_makefile`), exported from `semicraft_core.tb`.
+  `generate_tb` did **not** adopt `ResetSeq` (see §3.2 note).
 - **v2 (P3-01):** full node family — new statements `WaitUntil`, `ForkJoin`,
   `RepeatBlock`, `IfTb`, `TimeoutGuard`, `Dump`, `CallTask`; new module-level
   `ResetSeq`, `Task`, `AssertProperty`. New validator `validate_tb` (rules
@@ -72,16 +80,16 @@ defaults that hide required semantics. Rendering is deterministic — identical
 `WaitCycles` carries no signal — it implicitly waits on the testbench clock
 (`render_tb` emits the fixed net `clk`).
 
-**P3-01 additions (renderers land P3-02):**
+**P3-01 additions (rendered since P3-02):**
 
-| Node | Fields | Intended render |
+| Node | Fields | Renders |
 |---|---|---|
 | `WaitUntil` | `condition_text: str` | `wait (condition_text);` (level-sensitive) |
-| `ForkJoin` | `branches: tuple[tuple[Stmt,...],...], join: "all"\|"any"\|"none"` | `fork ... join[_any\|_none]` |
+| `ForkJoin` | `branches: tuple[tuple[Stmt,...],...], join: "all"\|"any"\|"none"` | `fork` ... `join[_any\|_none]`; each branch wrapped in `begin ... end` (its own thread regardless of statement count) |
 | `RepeatBlock` | `count: int, stmts: tuple[Stmt,...]` | `repeat (count) begin ... end` |
-| `IfTb` | `condition_text: str, then, else_: tuple[Stmt,...] \| None` | `if (condition_text) begin ... end [else ...]` |
-| `TimeoutGuard` | `cycles: int, message: str` | forked watchdog: `repeat (cycles) @(posedge clk); $fatal(1, message);` |
-| `Dump` | `file: str, levels: int = 0` | `$dumpfile("file"); $dumpvars(levels, ...);` |
+| `IfTb` | `condition_text: str, then, else_: tuple[Stmt,...] \| None` | `if (condition_text) begin ... end [else begin ... end]` |
+| `TimeoutGuard` | `cycles: int, message: str` | forked watchdog: `fork begin repeat (cycles) @(posedge clk); $fatal(1, "message"); end join_none` |
+| `Dump` | `file: str, levels: int = 0` | `$dumpfile("file"); $dumpvars(levels, <tb_name>);` (dump scope = the TB module) |
 | `CallTask` | `name: str` | `name();` |
 
 `join` allowed values are `JOIN_KINDS = {"all","any","none"}` mapping to
@@ -94,11 +102,18 @@ defaults that hide required semantics. Rendering is deterministic — identical
 
 **P3-01 additions:**
 
-| Node | Fields | Notes |
+| Node | Fields | Renders (P3-02) |
 |---|---|---|
-| `ResetSeq` | `signal: str, active_low: bool, cycles: int` | Declarative assert/hold/deassert. Formalizes what `generate_tb` inlines today as raw drives/waits. `generate_tb` may adopt it (P3-02/04) **only if the rendered text stays byte-identical**. |
-| `Task` | `name: str, stmts: tuple[Stmt,...]` | Named reusable sequence (`task name; ... endtask`), invoked via `CallTask`. |
-| `AssertProperty` | `name: str, property_text: str, clock: str, disable_iff: str \| None` | **SVA stub** — see §5. |
+| `ResetSeq` | `signal: str, active_low: bool, cycles: int` | Its own `initial begin ... end` process after the DUT instance: assert level at time 0, `repeat (cycles) @(posedge <clock>);` (`cycles==1` drops `repeat`), deassert. |
+| `Task` | `name: str, stmts: tuple[Stmt,...]` | `task name; ... endtask` between the DUT instance and the stimulus `initial`, in declaration order; invoked via `CallTask`. |
+| `AssertProperty` | `name: str, property_text: str, clock: str, disable_iff: str \| None` | `name: assert property (@(posedge clock) [disable iff (expr) ]property_text)` + `else $fatal(1, "SVA FAIL: name");`, after the stimulus `initial`. **SVA stub** — see §5. |
+
+`ResetSeq` adoption decision (P3-02): `generate_tb` keeps its reset **inline**.
+Today's reset lives *inside* the main `initial`, after the input-initialisation
+drives and under their shared comment line; a module-level `ResetSeq` renders as
+a separate `initial` process, so adoption cannot be byte-identical to the P2
+goldens. The renderer exists for hand-built/P3-04 TBs; `generate_tb` switching
+over would be a golden-visible change requiring an explicit spec decision.
 
 ### 3.3 Root node
 
@@ -145,7 +160,7 @@ a non-`snake_case` naming convention chosen by the user, outside T1's scope).
   recursive tasks (`automatic`), but the TB generators model bounded directed
   sequences, so recursion is treated as an authoring error.
 
-## 6. Rendering rules (`render_tb`, P2 smoke subset)
+## 6. Rendering rules (`render_tb`)
 
 - **SystemVerilog only**, even for Verilog DUTs (a `.sv` TB instantiating a `.v`
   module elaborates fine under Verilator; single simplest path).
@@ -161,8 +176,25 @@ a non-`snake_case` naming convention chosen by the user, outside T1's scope).
 - Deterministic: no timestamps; banner mirrors the RTL header (tool version,
   config hash, disclaimer).
 
-New P3-01 nodes are **not** rendered by `render_tb` yet — `_emit_stmt` raises on
-any statement outside the P2 smoke set. Their renderers land with P3-02.
+Since P3-02, `_emit_stmt` renders **every** member of the `Stmt` union (it no
+longer raises on P3 nodes), per the render columns in §3. Module layout: decls,
+clock, DUT instance, then the optional P3 sections — `ResetSeq` process, `Task`
+declarations, the stimulus `initial`, `AssertProperty` block (under a
+`// Concurrent assertions (SVA)` comment) — each omitted entirely when absent,
+so P2 smoke constructions render byte-identically to v1.
+
+### 6b. Sim-script emitters (`tb/scripts.py`, P3-02)
+
+`emit_run_script(tb_filename, rtl_filenames) -> str` and
+`emit_makefile(tb_filename, rtl_filenames) -> str` (exported from
+`semicraft_core.tb`) emit a POSIX `run.sh` / `Makefile` pair driving the exact
+two-stage flow of `semicraft_core.sim.runner.run_smoke`: `verilator --timing
+--binary --build-jobs 1 -Mdir obj_dir <tb> <rtl...>` then execute
+`obj_dir/V<top>` (`<top>` = the TB filename's stem, which `render_tb` guarantees
+is the TB module name). Deterministic, no timestamps; filenames must be bare
+relative names free of shell metacharacters (`ValueError` otherwise). Icarus
+fallback (plan P3-02 row) is deferred — the sim runner is Verilator-only today,
+and the scripts mirror the runner.
 
 ## 7. Name/width consistency (the correctness anchor)
 

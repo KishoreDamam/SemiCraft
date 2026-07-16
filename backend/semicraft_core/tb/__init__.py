@@ -11,6 +11,14 @@ TB_SPEC T-rules, including the TB/RTL separation invariant. See
 
 from .generate_tb import generate_tb
 from .render_tb import render_tb
+from .scripts import emit_makefile, emit_run_script
 from .validate import TbValidationError, validate_tb
 
-__all__ = ["generate_tb", "render_tb", "validate_tb", "TbValidationError"]
+__all__ = [
+    "generate_tb",
+    "render_tb",
+    "validate_tb",
+    "TbValidationError",
+    "emit_run_script",
+    "emit_makefile",
+]
