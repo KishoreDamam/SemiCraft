@@ -30,7 +30,8 @@ module pwm_tb;
         // Watchdog: fail loudly if the run hangs
         fork
             begin
-                repeat (184) @(posedge clk);
+                static int watchdog_i;
+                for (watchdog_i = 0; watchdog_i < 184; watchdog_i++) @(posedge clk);
                 $fatal(1, "TIMEOUT: pwm_tb exceeded 184 cycles");
             end
         join_none

@@ -32,7 +32,8 @@ module rr_arbiter_tb;
         // Watchdog: fail loudly if the run hangs
         fork
             begin
-                repeat (224) @(posedge clk);
+                static int watchdog_i;
+                for (watchdog_i = 0; watchdog_i < 224; watchdog_i++) @(posedge clk);
                 $fatal(1, "TIMEOUT: rr_arbiter_tb exceeded 224 cycles");
             end
         join_none

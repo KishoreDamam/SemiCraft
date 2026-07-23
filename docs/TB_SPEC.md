@@ -88,7 +88,7 @@ defaults that hide required semantics. Rendering is deterministic — identical
 | `ForkJoin` | `branches: tuple[tuple[Stmt,...],...], join: "all"\|"any"\|"none"` | `fork` ... `join[_any\|_none]`; each branch wrapped in `begin ... end` (its own thread regardless of statement count) |
 | `RepeatBlock` | `count: int, stmts: tuple[Stmt,...]` | `repeat (count) begin ... end` |
 | `IfTb` | `condition_text: str, then, else_: tuple[Stmt,...] \| None` | `if (condition_text) begin ... end [else begin ... end]` |
-| `TimeoutGuard` | `cycles: int, message: str` | forked watchdog: `fork begin repeat (cycles) @(posedge clk); $fatal(1, "message"); end join_none` |
+| `TimeoutGuard` | `cycles: int, message: str` | forked watchdog: `fork begin static int watchdog_i; for (watchdog_i = 0; watchdog_i < cycles; watchdog_i++) @(posedge clk); $fatal(1, "message"); end join_none`. The posedge count uses an explicit **static** loop var, not `repeat` — Verilator flags `repeat`'s implicit automatic counter as possibly outliving the `join_none` process (`%Error-LIFETIME` under `--timing`). |
 | `Dump` | `file: str, levels: int = 0` | `$dumpfile("file"); $dumpvars(levels, <tb_name>);` (dump scope = the TB module) |
 | `CallTask` | `name: str` | `name();` |
 

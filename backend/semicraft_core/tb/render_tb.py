@@ -185,11 +185,20 @@ def _emit_stmt(w: _Writer, s: Stmt, scope: str) -> None:
             w.line("end")
     elif isinstance(s, TimeoutGuard):
         # Forked watchdog: a hung DUT fails loudly instead of stalling the sim.
+        # The posedge count uses an explicit *static* loop variable rather than
+        # `repeat`: Verilator flags `repeat`'s implicit automatic counter as
+        # possibly outliving the join_none process (%Error-LIFETIME under
+        # --timing). A static int in the forked block sidesteps that while
+        # keeping the same "fire after N rising edges" semantics.
         w.line("fork")
         w.indent()
         w.line("begin")
         w.indent()
-        w.line(f"repeat ({s.cycles}) @(posedge {_CLOCK_NAME});")
+        w.line("static int watchdog_i;")
+        w.line(
+            f"for (watchdog_i = 0; watchdog_i < {s.cycles}; watchdog_i++) "
+            f"@(posedge {_CLOCK_NAME});"
+        )
         w.line(f'$fatal(1, "{s.message}");')
         w.dedent()
         w.line("end")

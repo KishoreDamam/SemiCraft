@@ -166,7 +166,9 @@ def test_timeout_guard_renders_forked_watchdog() -> None:
     expected = (
         f"{_I2}fork\n"
         f"{_I3}begin\n"
-        f"{_I4}repeat (1000) @(posedge clk);\n"
+        f"{_I4}static int watchdog_i;\n"
+        f"{_I4}for (watchdog_i = 0; watchdog_i < 1000; watchdog_i++) "
+        f"@(posedge clk);\n"
         f'{_I4}$fatal(1, "TIMEOUT: mini hung");\n'
         f"{_I3}end\n"
         f"{_I2}join_none\n"

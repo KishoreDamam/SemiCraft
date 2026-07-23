@@ -28,7 +28,8 @@ module gray_counter_tb;
         // Watchdog: fail loudly if the run hangs
         fork
             begin
-                repeat (200) @(posedge clk);
+                static int watchdog_i;
+                for (watchdog_i = 0; watchdog_i < 200; watchdog_i++) @(posedge clk);
                 $fatal(1, "TIMEOUT: gray_counter_tb exceeded 200 cycles");
             end
         join_none

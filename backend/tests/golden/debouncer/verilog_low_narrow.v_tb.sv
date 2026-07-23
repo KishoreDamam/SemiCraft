@@ -30,7 +30,8 @@ module debouncer_tb;
         // Watchdog: fail loudly if the run hangs
         fork
             begin
-                repeat (208) @(posedge clk);
+                static int watchdog_i;
+                for (watchdog_i = 0; watchdog_i < 208; watchdog_i++) @(posedge clk);
                 $fatal(1, "TIMEOUT: debouncer_tb exceeded 208 cycles");
             end
         join_none

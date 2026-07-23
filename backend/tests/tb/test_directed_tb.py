@@ -73,15 +73,17 @@ def test_watchdog_budget_exceeds_run(item_id: str) -> None:
     clock edges a healthy run consumes, so it never fires on a passing TB."""
     res = generate_files(item_id, {})
     tb = next(f.text for f in res.files if f.kind == "tb")
-    budget = int(re.search(r"repeat \((\d+)\) @\(posedge clk\);", tb).group(1))
-    # Count every wait the stimulus performs (reset hold + directed cycles). The
-    # reset ``repeat`` and negedge ``repeat`` waits, plus bare single-edge waits.
+    # The watchdog counts posedges with a static-int for-loop (Verilator-clean):
+    # for (watchdog_i = 0; watchdog_i < N; watchdog_i++) @(posedge clk);
+    budget = int(re.search(r"watchdog_i < (\d+);", tb).group(1))
+    # Count every wait the stimulus performs (reset hold + directed cycles): the
+    # reset/negedge ``repeat`` waits plus bare single-edge waits. The watchdog's
+    # own for-loop starts with ``for`` (not ``repeat`` or a bare ``@``), so it is
+    # not counted here — no subtraction needed.
     edges = 0
     for m in re.finditer(r"repeat \((\d+)\) @\((?:pos|neg)edge clk\);", tb):
         edges += int(m.group(1))
     edges += len(re.findall(r"^\s*@\((?:pos|neg)edge clk\);", tb, flags=re.M))
-    # ``edges`` double-counts the watchdog's own repeat; subtract it.
-    edges -= budget
     assert budget > edges > 0
 
 

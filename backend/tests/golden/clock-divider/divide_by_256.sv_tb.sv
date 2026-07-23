@@ -28,7 +28,8 @@ module clock_divider_tb;
         // Watchdog: fail loudly if the run hangs
         fork
             begin
-                repeat (2192) @(posedge clk);
+                static int watchdog_i;
+                for (watchdog_i = 0; watchdog_i < 2192; watchdog_i++) @(posedge clk);
                 $fatal(1, "TIMEOUT: clock_divider_tb exceeded 2192 cycles");
             end
         join_none
