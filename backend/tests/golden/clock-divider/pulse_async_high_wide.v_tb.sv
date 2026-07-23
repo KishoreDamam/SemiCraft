@@ -25,6 +25,13 @@ module clock_divider_tb;
 
     // Stimulus and self-checking assertions
     initial begin
+        // Watchdog: fail loudly if the run hangs
+        fork
+            begin
+                repeat (8344) @(posedge clk);
+                $fatal(1, "TIMEOUT: clock_divider_tb exceeded 8344 cycles");
+            end
+        join_none
         // Initialise inputs and assert reset
         rst = 1'd1;
         repeat (2) @(posedge clk);

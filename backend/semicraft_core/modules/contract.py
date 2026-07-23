@@ -37,6 +37,11 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
+# The declarative assertion recipe a module may attach to its TbSpec so the TB
+# generator wires generated SVA (P3-04). A frozen dataclass, not a pydantic
+# model, so TbSpec opts into ``arbitrary_types_allowed`` to carry it.
+from ..assertions.spec import AssertionSpec
+
 # Re-export the shared explanation type so module files import it from here,
 # keeping the modules package self-contained at the import surface.
 from ..snippets.contract import ExplanationDoc
@@ -46,6 +51,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "PortGroup",
+    "PortConstraint",
     "Check",
     "TbSpec",
     "ModuleDef",
@@ -82,6 +88,30 @@ class PortGroup(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class PortConstraint(BaseModel):
+    """An optional per-port constraint on the values a stimulus vector may drive.
+
+    Additive metadata (P3-04): a module may map an input port name to a
+    ``PortConstraint`` on its :class:`TbSpec` to bound the values the directed
+    stimulus table drives on that port. The TB generator clamps each driven
+    value into ``[min_value, max_value]`` (whichever bounds are given) *before*
+    it masks the value to the resolved port width. Ports without a constraint
+    are only width-masked, so a module that declares none behaves exactly as it
+    did before this field existed.
+
+    Both bounds are inclusive; ``None`` means "unbounded on that side".
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    min_value: int | None = Field(
+        default=None, ge=0, description="Inclusive lower bound, or null for no lower bound."
+    )
+    max_value: int | None = Field(
+        default=None, ge=0, description="Inclusive upper bound, or null for no upper bound."
+    )
+
+
 class Check(BaseModel):
     """One expected-value assertion for the smoke TB (Appendix A.3).
 
@@ -106,7 +136,10 @@ class TbSpec(BaseModel):
     how many cycles the TB holds reset asserted before driving vectors.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    # ``arbitrary_types_allowed`` lets ``assertion_spec`` carry the frozen
+    # ``AssertionSpec`` dataclass (not a pydantic model); ``extra="forbid"``
+    # still rejects unknown keys.
+    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
     clock: str | None = Field(
         default=None, description="Clock port name, or null for a combinational module."
@@ -126,6 +159,22 @@ class TbSpec(BaseModel):
     checks: list[Check] = Field(
         default_factory=list,
         description="Expected-value assertions the smoke TB will check.",
+    )
+    port_constraints: dict[str, PortConstraint] = Field(
+        default_factory=dict,
+        description=(
+            "Optional per-port value constraints (canonical port name -> "
+            "PortConstraint) the TB generator honours when driving vectors. "
+            "Empty by default: unconstrained ports are only width-masked."
+        ),
+    )
+    assertion_spec: AssertionSpec | None = Field(
+        default=None,
+        description=(
+            "Optional declarative SVA recipe. When set, the TB generator runs "
+            "assertions.generate_assertions on it and emits the resulting "
+            "concurrent-assertion block; null (the default) emits no SVA."
+        ),
     )
 
 

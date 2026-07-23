@@ -27,6 +27,13 @@ module pwm_tb;
 
     // Stimulus and self-checking assertions
     initial begin
+        // Watchdog: fail loudly if the run hangs
+        fork
+            begin
+                repeat (184) @(posedge clk);
+                $fatal(1, "TIMEOUT: pwm_tb exceeded 184 cycles");
+            end
+        join_none
         // Initialise inputs and assert reset
         duty = 4'd0;
         rst_n = 1'd0;

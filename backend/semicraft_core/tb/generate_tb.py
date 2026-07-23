@@ -48,6 +48,7 @@ from ..ir.nodes import (
 from ..license import DISCLAIMER
 from ..render.style import StyleOptions, build_name_map
 from .nodes import (
+    AssertProperty,
     ClockGen,
     Decl,
     Delay,
@@ -60,6 +61,7 @@ from .nodes import (
     Stmt,
     TbComment,
     TbModule,
+    TimeoutGuard,
     WaitCycles,
 )
 from .render_tb import render_tb
@@ -68,6 +70,34 @@ from .render_tb import render_tb
 _WRAP_WIDTH = 74
 _DUT_INSTANCE = "dut"
 _SETTLE_NS = 1
+
+# Watchdog budget: the TimeoutGuard counts posedge clk while the stimulus runs.
+# A healthy run reaches ``$finish`` in roughly ``reset_cycles + n_cycles`` rising
+# edges, so the guard is set to that total scaled by _TIMEOUT_SLACK (plus a fixed
+# floor) — comfortably beyond the longest healthy run, firing only if a hung DUT
+# stalls the stimulus process. Must never trip on a passing TB (CI run gate).
+_TIMEOUT_SLACK = 8
+_TIMEOUT_FLOOR = 16
+
+
+def _constrain_value(value: int, width: int, constraint) -> int:
+    """Fit a stimulus ``value`` to its port: clamp to any declared bounds, then
+    mask to the resolved port ``width``.
+
+    ``constraint`` is the port's :class:`~..modules.contract.PortConstraint` or
+    ``None``. With no constraint the value is only width-masked; because every
+    module's existing vectors already fit their port width, masking is a no-op
+    for them (byte-identical output). The mask is the safety net that keeps a
+    driven literal from ever exceeding the net it feeds.
+    """
+    if constraint is not None:
+        if constraint.min_value is not None and value < constraint.min_value:
+            value = constraint.min_value
+        if constraint.max_value is not None and value > constraint.max_value:
+            value = constraint.max_value
+    if width >= 1:
+        value &= (1 << width) - 1
+    return value
 
 
 def _style_from_options(opts) -> StyleOptions:
@@ -191,6 +221,22 @@ def generate_tb(module_def, opts, rtl_module: Module) -> str:
 
     stmts: list[Stmt] = []
 
+    # Directed cycles: drive vectors on the falling edge, check after settle.
+    max_check_cycle = max((c.cycle for c in spec.checks), default=-1)
+    n_cycles = max(len(spec.vectors), max_check_cycle + 1)
+
+    # Watchdog first, so it covers the whole run (init + reset + directed
+    # cycles). A hung DUT now fails loudly instead of stalling the simulator;
+    # the budget scales with the TB length so it never fires on a healthy run.
+    timeout_cycles = (spec.reset_cycles + n_cycles + _TIMEOUT_FLOOR) * _TIMEOUT_SLACK
+    stmts.append(TbComment("Watchdog: fail loudly if the run hangs"))
+    stmts.append(
+        TimeoutGuard(
+            cycles=timeout_cycles,
+            message=f"TIMEOUT: {rtl_module.name}_tb exceeded {timeout_cycles} cycles",
+        )
+    )
+
     # Initialise every driven input to 0, then assert reset.
     stmts.append(TbComment("Initialise inputs and assert reset"))
     for p in ports:
@@ -202,8 +248,6 @@ def generate_tb(module_def, opts, rtl_module: Module) -> str:
         stmts.append(DriveSignal(reset_net, reset_deassert, 1))
 
     # Directed cycles: drive vectors on the falling edge, check after settle.
-    max_check_cycle = max((c.cycle for c in spec.checks), default=-1)
-    n_cycles = max(len(spec.vectors), max_check_cycle + 1)
     checks_by_cycle: dict[int, list] = {}
     for chk in spec.checks:
         checks_by_cycle.setdefault(chk.cycle, []).append(chk)
@@ -226,7 +270,10 @@ def generate_tb(module_def, opts, rtl_module: Module) -> str:
         if has_drives:
             for sig in sorted(spec.vectors[c]):
                 w = width_of.get(sig, 1)
-                stmts.append(DriveSignal(styled(sig), spec.vectors[c][sig], w))
+                val = _constrain_value(
+                    spec.vectors[c][sig], w, spec.port_constraints.get(sig)
+                )
+                stmts.append(DriveSignal(styled(sig), val, w))
         if c in checks_by_cycle:
             stmts.append(Delay(_SETTLE_NS))
             for chk in checks_by_cycle[c]:
@@ -238,6 +285,23 @@ def generate_tb(module_def, opts, rtl_module: Module) -> str:
     stmts.append(Display(f"SMOKE PASS: {rtl_module.name}"))
     stmts.append(Finish())
 
+    # Optional concurrent SVA: emitted only when the module attaches an
+    # assertion recipe to its TbSpec. No current module does, so this is inert
+    # (asserts stays empty and the TB renders exactly as before, aside from the
+    # watchdog). The recipe's signal names are taken verbatim — property text is
+    # opaque (TB_SPEC §5), so naming-style transforms are not reapplied inside
+    # it; a module attaching one is responsible for spelling the names to match
+    # its rendered RTL.
+    asserts: tuple[AssertProperty, ...] = ()
+    if spec.assertion_spec is not None:
+        # Lazy import: the assertions package pulls in the TB node family, so a
+        # module-load-time import here would form a cycle
+        # (contract -> assertions -> tb -> generate_tb). Importing at call time
+        # keeps the package-load graph acyclic.
+        from ..assertions.generate import generate_assertions
+
+        asserts = generate_assertions(spec.assertion_spec)
+
     tb = TbModule(
         name=f"{rtl_module.name}_tb",
         decls=decls,
@@ -245,6 +309,7 @@ def generate_tb(module_def, opts, rtl_module: Module) -> str:
         dut=dut,
         initial=Initial(tuple(stmts)),
         banner=_banner(rtl_module),
+        asserts=asserts,
     )
     return render_tb(tb)
 

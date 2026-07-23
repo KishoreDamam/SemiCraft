@@ -27,6 +27,13 @@ module debouncer_tb;
 
     // Stimulus and self-checking assertions
     initial begin
+        // Watchdog: fail loudly if the run hangs
+        fork
+            begin
+                repeat (208) @(posedge clk);
+                $fatal(1, "TIMEOUT: debouncer_tb exceeded 208 cycles");
+            end
+        join_none
         // Initialise inputs and assert reset
         d_in = 1'd0;
         rst_n = 1'd0;

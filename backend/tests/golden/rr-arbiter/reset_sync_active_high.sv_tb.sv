@@ -29,6 +29,13 @@ module rr_arbiter_tb;
 
     // Stimulus and self-checking assertions
     initial begin
+        // Watchdog: fail loudly if the run hangs
+        fork
+            begin
+                repeat (224) @(posedge clk);
+                $fatal(1, "TIMEOUT: rr_arbiter_tb exceeded 224 cycles");
+            end
+        join_none
         // Initialise inputs and assert reset
         req = 4'd0;
         rst = 1'd1;
