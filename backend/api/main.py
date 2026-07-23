@@ -322,6 +322,46 @@ def generate_v2_zip(body: GenerateV2Request):
     )
 
 
+# --- POST /api/v2/simulate ---------------------------------------------------
+
+
+@app.post("/api/v2/simulate")
+def simulate_v2(body: GenerateV2Request):
+    """Generate an item's file set and run its smoke TB in the sim sandbox.
+
+    Additive to the frozen v2 contract (Appendix A / P3-03): shares the v2
+    generate request shape (``item_id`` + ``options``) and the same 404/422/500
+    error mapping via :func:`_generate_files_or_error`, then runs the generated
+    ``tb`` file against its ``rtl`` file(s) through the sim service.
+
+    Response (all keys always present)::
+
+        { "status": "pass"|"fail"|"unavailable"|"error"|"no_tb",
+          "exit_code": int | null,
+          "stdout_tail": str, "stderr_tail": str,
+          "duration_s": float, "marker_seen": bool }
+
+    Graceful degradation is mandatory: no ``verilator`` binary (local Windows
+    dev) yields ``status="unavailable"`` with a 200, never a 500. Items with no
+    testbench (``TbSpec.clock is None``, or snippets) yield ``status="no_tb"``.
+    """
+    result = _generate_files_or_error(body.item_id, body.options)
+    if isinstance(result, JSONResponse):
+        return result
+
+    from semicraft_core.sim import simulate as run_simulate
+
+    sim = run_simulate(result)
+    return {
+        "status": sim.status,
+        "exit_code": sim.exit_code,
+        "stdout_tail": sim.stdout_tail,
+        "stderr_tail": sim.stderr_tail,
+        "duration_s": sim.duration_s,
+        "marker_seen": sim.marker_seen,
+    }
+
+
 # Ensure our own request-body model surfaces the same envelope shape as the
 # rest of the app for any *other* validation errors FastAPI raises (e.g. a
 # malformed top-level body that never reaches the try/except above).

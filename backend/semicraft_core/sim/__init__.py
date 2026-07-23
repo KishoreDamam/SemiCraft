@@ -11,5 +11,6 @@ semantics.
 from __future__ import annotations
 
 from .runner import SimResult, run_smoke
+from .service import SimServiceResult, simulate
 
-__all__ = ["SimResult", "run_smoke"]
+__all__ = ["SimResult", "run_smoke", "SimServiceResult", "simulate"]

@@ -5,6 +5,7 @@ import {
   generateV2,
   getCatalog,
   isMockMode,
+  simulate,
 } from "@/lib/api";
 import { counterDefaults } from "@/mocks/schemas/counter";
 
@@ -89,6 +90,39 @@ describe("v2 client against mocks", () => {
     expect(zip.blob).toBeInstanceOf(Blob);
     expect(zip.blob.type).toBe("application/zip");
     expect(zip.filename).toMatch(/^semicraft_edge-detector_[0-9a-f]{12}\.zip$/);
+  });
+});
+
+describe("simulate client against mocks", () => {
+  it("a module with a testbench reports pass with the SMOKE PASS marker", async () => {
+    const res = await simulate("edge-detector", { language: "sv" });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data.status).toBe("pass");
+    expect(res.data.marker_seen).toBe(true);
+    expect(res.data.exit_code).toBe(0);
+    expect(res.data.stdout_tail).toContain("SMOKE PASS");
+  });
+
+  it("a snippet reports no_tb (no testbench to run)", async () => {
+    const res = await simulate("counter", { language: "sv" });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.data.status).toBe("no_tb");
+    expect(res.data.exit_code).toBe(null);
+    expect(res.data.marker_seen).toBe(false);
+  });
+
+  it("an unknown item returns a 404 result", async () => {
+    const res = await simulate("does-not-exist", {});
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.status).toBe(404);
+  });
+
+  it("invalid options return a 422 result", async () => {
+    const res = await simulate("counter", { width: 0 });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.status).toBe(422);
   });
 });
 

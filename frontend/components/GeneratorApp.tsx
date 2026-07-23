@@ -5,8 +5,9 @@ import type {
   CatalogItem,
   CatalogV2Response,
   GenerateV2Response,
+  SimulateResponse,
 } from "@/lib/types";
-import { downloadZip, generateV2, saveBlob } from "@/lib/api";
+import { downloadZip, generateV2, saveBlob, simulate } from "@/lib/api";
 import { canonicalJson } from "@/lib/hash";
 import {
   fromSearch,
@@ -19,6 +20,7 @@ import { CatalogPicker } from "@/components/CatalogPicker";
 import { CodePreview } from "@/components/CodePreview";
 import { FileTabs } from "@/components/FileTabs";
 import { LintBadge } from "@/components/LintBadge";
+import { SimPanel } from "@/components/SimPanel";
 import { ExplanationPanel } from "@/components/ExplanationPanel";
 
 const DEBOUNCE_MS = 300;
@@ -64,6 +66,8 @@ export function GeneratorApp({
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [permalinkCopied, setPermalinkCopied] = useState(false);
+  const [simResult, setSimResult] = useState<SimulateResponse | null>(null);
+  const [simBusy, setSimBusy] = useState(false);
 
   const item = itemById(catalog, itemId) ?? firstItem;
 
@@ -93,6 +97,9 @@ export function GeneratorApp({
         setActiveFile((prev) => (prev < res.data.files.length ? prev : 0));
         setFieldErrors({});
         setGlobalError(null);
+        // A fresh generation invalidates any prior sim result (it was for the
+        // previous config); clear it so the log viewer never shows stale output.
+        setSimResult(null);
       } else if ("fieldErrors" in res) {
         setFieldErrors(res.fieldErrors);
         setGlobalError(null);
@@ -129,6 +136,7 @@ export function GeneratorApp({
     setActiveFile(0);
     setFieldErrors({});
     setGlobalError(null);
+    setSimResult(null);
   };
 
   const onFieldChange = (name: string, value: unknown) => {
@@ -169,6 +177,19 @@ export function GeneratorApp({
       await downloadZip(itemId, values);
     } catch {
       setGlobalError("Zip download failed.");
+    }
+  };
+
+  const onRunSim = async () => {
+    if (!result) return;
+    setSimBusy(true);
+    setSimResult(null);
+    const res = await simulate(itemId, values);
+    setSimBusy(false);
+    if (res.ok) {
+      setSimResult(res.data);
+    } else {
+      setGlobalError(res.message);
     }
   };
 
@@ -229,6 +250,14 @@ export function GeneratorApp({
             {busy ? <span className="text-xs text-zinc-400">generating…</span> : null}
             <button
               type="button"
+              onClick={onRunSim}
+              disabled={!result || simBusy}
+              className="rounded border border-zinc-300 px-3 py-1 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+            >
+              {simBusy ? "Running…" : "Run smoke sim"}
+            </button>
+            <button
+              type="button"
               onClick={onCopy}
               disabled={!current}
               className="rounded border border-zinc-300 px-3 py-1 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
@@ -282,6 +311,8 @@ export function GeneratorApp({
             language={previewLanguage}
           />
         </div>
+
+        <SimPanel result={simResult} />
 
         <ExplanationPanel doc={result?.explanation ?? null} />
       </main>

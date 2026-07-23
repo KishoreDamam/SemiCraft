@@ -6,6 +6,7 @@ import type {
   JsonSchema,
   LintFileReport,
   LintReport,
+  SimulateResponse,
   ValidationErrorItem,
   ZipDownload,
 } from "@/lib/types";
@@ -615,6 +616,55 @@ export async function mockGenerateV2(
     lint: [{ path: v1.filename, ...v1.lint }],
     config_hash: v1.config_hash,
     language: v1.language,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// v2 sim mock: POST /api/v2/simulate. Modules with a testbench "run" and report
+// pass (representative — the real sandbox needs verilator, unavailable locally);
+// snippets and clock-less items report no_tb. Deterministic per item so the
+// log-viewer states are stable during UI development.
+// ---------------------------------------------------------------------------
+
+export async function mockSimulate(
+  itemId: string,
+  options: Record<string, unknown>,
+): Promise<SimulateResponse> {
+  const entry = getV2Entry(itemId); // throws MockNotFoundError
+
+  // Validate as the real endpoint does (generation happens before the run).
+  const errors: ValidationErrorItem[] = [];
+  const props = entry.json_schema.properties ?? {};
+  for (const [name, sub] of Object.entries(props)) {
+    validateField(name, sub, entry.json_schema, options[name], errors);
+  }
+  crossFieldValidate(itemId, options, errors);
+  if (errors.length > 0) throw new MockValidationError(errors);
+
+  // Only module-kind items emit a smoke TB in the mock catalog.
+  if (entry.kind !== "module") {
+    return {
+      status: "no_tb",
+      exit_code: null,
+      stdout_tail: "",
+      stderr_tail: "item generated no testbench; nothing to simulate.",
+      duration_s: 0,
+      marker_seen: false,
+    };
+  }
+
+  const moduleName = itemId.replace(/-/g, "_");
+  return {
+    status: "pass",
+    exit_code: 0,
+    stdout_tail: [
+      `[${moduleName}_tb] applying reset for 2 cycles`,
+      `[${moduleName}_tb] driving 8 directed vectors`,
+      `SMOKE PASS: ${moduleName}`,
+    ].join("\n"),
+    stderr_tail: "",
+    duration_s: 1.23,
+    marker_seen: true,
   };
 }
 

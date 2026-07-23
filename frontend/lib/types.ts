@@ -185,3 +185,32 @@ export interface ZipDownload {
   blob: Blob;
   filename: string;
 }
+
+// ---------------------------------------------------------------------------
+// Sim sandbox (P3-03). POST /api/v2/simulate runs an item's smoke testbench.
+// ---------------------------------------------------------------------------
+
+/**
+ * Outcome of a smoke-sim run:
+ *  - `pass` — compiled, ran, exited 0, printed the SMOKE PASS marker;
+ *  - `fail` — compiled + ran but a check failed / marker never printed;
+ *  - `unavailable` — no verilator in this environment (local dev degradation);
+ *  - `error` — compile error or timeout (couldn't get a clean pass/fail read);
+ *  - `no_tb` — the item generated no testbench (snippet, or clock-less module).
+ */
+export type SimStatus = "pass" | "fail" | "unavailable" | "error" | "no_tb";
+
+/** 200 body for POST /api/v2/simulate. */
+export interface SimulateResponse {
+  status: SimStatus;
+  exit_code: number | null;
+  stdout_tail: string;
+  stderr_tail: string;
+  duration_s: number;
+  marker_seen: boolean;
+}
+
+/** Discriminated result of a simulate call, mirroring GenerateV2Result. */
+export type SimulateResult =
+  | { ok: true; data: SimulateResponse }
+  | { ok: false; status: number; message: string };

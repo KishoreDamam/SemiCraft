@@ -5,6 +5,8 @@ import type {
   GenerateResult,
   GenerateV2Response,
   GenerateV2Result,
+  SimulateResponse,
+  SimulateResult,
   ValidationErrorResponse,
   ZipDownload,
 } from "@/lib/types";
@@ -14,6 +16,7 @@ import {
   MockValidationError,
   mockGenerate,
   mockGenerateV2,
+  mockSimulate,
   mockZip,
 } from "@/mocks/generate";
 
@@ -175,6 +178,55 @@ export async function generateV2(
     status: res.status,
     message: `Generation failed (${res.status}).`,
   };
+}
+
+/**
+ * Run an item's smoke testbench in the sim sandbox (POST /api/v2/simulate).
+ *
+ * Always resolves (never throws for "sim failed" / "verilator missing" — those
+ * are `data.status` values on a 200). Non-200s (404 unknown item, 422 invalid
+ * options, 5xx) come back as `{ ok: false }` so the caller can surface them.
+ */
+export async function simulate(
+  itemId: string,
+  options: Record<string, unknown>,
+): Promise<SimulateResult> {
+  if (isMockMode()) {
+    try {
+      const data = await mockSimulate(itemId, options);
+      return { ok: true, data };
+    } catch (e) {
+      if (e instanceof MockValidationError) {
+        return { ok: false, status: 422, message: "Invalid options." };
+      }
+      if (e instanceof MockNotFoundError) {
+        return { ok: false, status: 404, message: "Unknown item." };
+      }
+      return { ok: false, status: 500, message: "Simulation failed." };
+    }
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/api/v2/simulate`, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({ item_id: itemId, options }),
+    });
+  } catch {
+    return { ok: false, status: 0, message: "Network error contacting backend." };
+  }
+
+  if (res.ok) {
+    return { ok: true, data: (await res.json()) as SimulateResponse };
+  }
+  if (res.status === 422) {
+    return { ok: false, status: 422, message: "Invalid options." };
+  }
+  if (res.status === 404) {
+    return { ok: false, status: 404, message: "Unknown item." };
+  }
+  return { ok: false, status: res.status, message: `Simulation failed (${res.status}).` };
 }
 
 /** Extract the filename from a Content-Disposition header, with a fallback. */
