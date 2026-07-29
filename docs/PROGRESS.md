@@ -1,6 +1,6 @@
 # SemiCraft Progress Tracker
 
-Updated: 2026-07-04. Keep current — this file is the session-handoff state.
+Updated: 2026-07-29. Keep current — this file is the session-handoff state.
 
 ## WP status
 
@@ -68,4 +68,42 @@ Updated: 2026-07-04. Keep current — this file is the session-handoff state.
 | P3-03 sim sandbox service | DONE, committed b25e693, pushed | POST /api/v2/simulate over run_smoke; status pass/fail/unavailable/no_tb/error; degrades to "unavailable" HTTP 200 (no Verilator locally); frontend Run button + SimPanel log viewer. 15 backend + 9 frontend tests; v2 additive |
 | P3-04 directed-TB generator | DONE, committed dae8057, pushed | per-port width/PortConstraint clamping (no-op → drives byte-identical); TimeoutGuard watchdog forked atop stimulus initial (budget (reset_cycles+n_cycles+16)*8, never fires on pass); expected values still only from TbSpec.checks; ResetSeq NOT adopted; inert assertion_spec hook (no SVA for current modules). All 165 TB goldens regenerated (watchdog-only diff, 0 RTL/doc change). 2456 tests green |
 | CI run-gate watch | DONE — CI GREEN on 482cd71 | first push (592000c) RED: all 165 TBs hit %Error-LIFETIME — watchdog `repeat` counter is automatic, may outlive join_none process under verilator --timing. Fixed (482cd71) with explicit `static int watchdog_i` for-loop (Verilator's own suggested fix); same posedge-count semantics. lint + tb-compile + tb-run all green |
-| Next | P3-06 checker/monitor/scoreboard scaffolds (sonnet) + P3-07 test-plan doc gen (sonnet, dep P3-04) OR P3-08 cocotb beta (dep P3-03); then P3-09 golden+CI release v0.3.0 | 2-agent budget per session |
+| P3-06 checker scaffolds | DONE, committed 960894f | standalone semicraft_core/checkers: monitor (passive sampler) / checker (procedural reset+stability+latency checks) / scoreboard (SV class, expected queue, report()). Directed, not UVM. NOT wired into generate_files — no golden changes. docs/CHECKERS.md. Emitted SV is NOT compile-verified (see next section: verilator IS available in Linux containers, so a compile gate for these is now cheap — do it when wiring lands) |
+| P3-07 test-plan doc gen | DONE, committed 596d81c | semicraft_core/testplan.py -> `<module>_testplan.md` as a SECOND doc-kind file appended after the datasheet (datasheet stays files[]'s first doc entry, so `next(f for f in files if f.kind=="doc")` still resolves to it). 165 testplan goldens; all pre-existing rtl/doc/tb goldens byte-identical. Gap list (undriven inputs / unchecked outputs) reports "None found" on all current modules — verified genuinely true, and the logic has synthetic tests proving it fires both ways. docs/TESTPLAN.md |
+| Next | **P3-09 first — it now has a concrete bug list (see "Full TB run matrix" below), not just a release checklist.** Then P3-08 cocotb beta (dep P3-03) | 2-agent budget per session |
+
+## Full TB run matrix — 17 pre-existing failures (found 2026-07-29)
+
+**Verilator IS available in Linux remote containers** (`apt-get install -y
+verilator` → 5.020). The "no Verilator locally" note under Environment facts
+is a *Windows-host* fact only. In a container the compile and run gates can be
+run before pushing instead of discovering breakage from CI logs — which is how
+the P3-04 `%Error-LIFETIME` regression escaped.
+
+Running the **full** matrix (`SEMICRAFT_TB_RUN_ALL=1 uv run pytest
+backend/tests/golden/test_tb_run.py`, ~23 min) against clean HEAD 0d3466d:
+**17 failed, 148 passed**. CI is green only because it defaults to the
+`defaults` case per module — every failure is in a *non-default* option
+variant, so this has been latent since the run gate went enforcing.
+
+Failing cases: gray-counter (`enable_off` sv+v, `verilog_no_enable_wide`,
+`wide_no_enable_sync_low` sv+v), lfsr (`enable_off` sv+v,
+`output_style_serial` sv+v, `serial_no_enable_width32` sv+v,
+`verilog_serial_width16`), clock-divider (`pulse_style.v`,
+`verilog_pulse_wide.v`).
+
+Root cause (traced in `modules/gray_counter.py` tb_spec, lines ~232-243) —
+an off-by-one *edge*, not an off-by-one cycle: the `bins[i]` model assumes the
+counter has taken `i` post-reset edges when TB cycle `i` is sampled. That holds
+**only when `enable` is set**, because `en` initialises to 0 and is not driven
+high until cycle 0's negedge, so the posedge between reset deassertion and the
+cycle-0 sample does not increment. With `enable` **off** the counter is
+free-running, that edge *does* increment, and actual `gray` at cycle 0 is 1,
+not 0 (`SMOKE FAIL: gray at cycle 0 expected 0, got 1`). The no-enable configs
+need `bins[c+1]`. lfsr's enable_off/serial variants and clock-divider's
+pulse variants are very likely the same shape — confirm per module rather than
+assuming.
+
+Fix the modules' TbSpec expected values (never the gate), regenerate the TB
+goldens, then re-run the full matrix. Consider making the full matrix the CI
+default once green — `defaults`-only is precisely what let this sit unnoticed.
