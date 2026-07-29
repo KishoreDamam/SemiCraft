@@ -81,6 +81,20 @@ class GoldenCase:
         return GOLDEN_ROOT / self.snippet_id / f"{self.case_name}.{_extension(self.language)}_tb.sv"
 
     @property
+    def testplan_snapshot_path(self) -> Path:
+        """Golden path for the module test-plan ``doc`` file (P3-07,
+        ``generate_files()``, second ``doc``-kind entry).
+
+        Language-qualified for the same config_hash reason as
+        :attr:`doc_snapshot_path`/:attr:`tb_snapshot_path`.
+        """
+        return (
+            GOLDEN_ROOT
+            / self.snippet_id
+            / f"{self.case_name}.{_extension(self.language)}_testplan.md"
+        )
+
+    @property
     def resolved_options(self) -> dict:
         """Options dict with ``language`` pinned to this case's resolved language."""
         return {**self.options, "language": self.language}

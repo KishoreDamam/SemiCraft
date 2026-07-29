@@ -185,9 +185,10 @@ class GeneratedFile:
 class GenerateFilesResult:
     """Result of :func:`generate_files` — the multi-file API v2 shape.
 
-    ``files`` is ordered rtl-first (then doc, then tb once P2-13 lands). The
-    ``explanation``/``config_hash``/``language`` fields mirror the single-file
-    :class:`GenerateResult`.
+    ``files`` is ordered rtl-first, then doc (datasheet), then tb, then a
+    second doc (test plan, P3-07) for module items; snippets emit only the
+    rtl entry. The ``explanation``/``config_hash``/``language`` fields mirror
+    the single-file :class:`GenerateResult`.
     """
 
     files: list[GeneratedFile] = field(default_factory=list)
@@ -292,9 +293,11 @@ def generate_files(item_id: str, options: dict) -> GenerateFilesResult:
 
     Snippets produce a single ``rtl`` file via the existing render pipeline.
     Modules produce an ``rtl`` file plus a ``doc`` file (markdown datasheet from
-    the ExplanationDoc + port groups). TB emission is feature-flagged off
-    (:data:`EMIT_TB`) until P2-13; when enabled it appends a ``tb`` file built
-    from ``ModuleDef.tb_spec``.
+    the ExplanationDoc + port groups), a ``tb`` file (feature-flagged by
+    :data:`EMIT_TB`, built from ``ModuleDef.tb_spec``), and a second ``doc``
+    file — a test-plan/verification-checklist document (P3-07,
+    :func:`semicraft_core.testplan.generate_testplan`) appended *after* the
+    datasheet so the datasheet stays the first ``doc`` entry in ``files``.
 
     Error mapping matches :func:`generate` (unknown id -> 404, invalid options
     -> 422, IR bug -> 500). Pure with respect to its inputs.
@@ -323,6 +326,22 @@ def generate_files(item_id: str, options: dict) -> GenerateFilesResult:
                 files.append(
                     GeneratedFile(path=f"{rtl_module.name}_tb.sv", kind="tb", text=tb_text)
                 )
+
+        # Test-plan document (P3-07): a second `doc`-kind file appended after
+        # the datasheet, derived entirely from ExplanationDoc/port_groups/
+        # tb_spec — no new ModuleDef metadata. Kept last in `files` so the
+        # datasheet stays the *first* `doc` entry (existing tests/tooling that
+        # pick "the" doc file via `next(f for f in files if f.kind == "doc")`
+        # keep resolving to the datasheet).
+        if hasattr(item, "tb_spec"):
+            from .testplan import generate_testplan
+
+            testplan_text = generate_testplan(item, opts, rtl_module, explanation, chash)
+            files.append(
+                GeneratedFile(
+                    path=f"{doc_stem}_testplan.md", kind="doc", text=testplan_text
+                )
+            )
 
     return GenerateFilesResult(
         files=files,

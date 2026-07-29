@@ -105,6 +105,52 @@ def test_snapshot_doc(case: GoldenCase, request: pytest.FixtureRequest) -> None:
 @pytest.mark.parametrize(
     "case", _MODULE_CASES, ids=[golden_case_id(c) for c in _MODULE_CASES]
 )
+def test_snapshot_testplan(case: GoldenCase, request: pytest.FixtureRequest) -> None:
+    """Snapshot the P3-07 test-plan document (the second ``doc``-kind file).
+
+    Located by path suffix rather than "the doc file" (that lookup, used
+    elsewhere, intentionally resolves to the *datasheet* — the first ``doc``
+    entry — per the P3-07 ordering requirement: the test-plan doc is appended
+    after it, never displacing it).
+    """
+    result = generate_files(case.snippet_id, case.resolved_options)
+    testplan_file = next(
+        (f for f in result.files if f.path.endswith("_testplan.md")), None
+    )
+    assert testplan_file is not None, (
+        f"module case {case.snippet_id}/{case.case_name} produced no test-plan "
+        "doc file from generate_files() (P3-07 requires one for every module)"
+    )
+    assert testplan_file.kind == "doc"
+
+    update = request.config.getoption("--update-golden")
+    path = case.testplan_snapshot_path
+
+    if update:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(testplan_file.text.encode("utf-8"))
+        return
+
+    if not path.is_file():
+        pytest.skip(
+            f"no committed testplan golden at {path} yet (P3-07 infra landed "
+            "ahead of the testplan snapshot regeneration/review pass). Run "
+            "--update-golden locally, review the diff, and commit to turn "
+            "this into a real gate."
+        )
+
+    expected = path.read_bytes()
+    actual = testplan_file.text.encode("utf-8")
+    assert actual == expected, (
+        f"generated testplan for {case.snippet_id}/{case.case_name} "
+        f"[{case.language}] no longer matches {path}. If intentional, "
+        "regenerate with --update-golden and review the diff."
+    )
+
+
+@pytest.mark.parametrize(
+    "case", _MODULE_CASES, ids=[golden_case_id(c) for c in _MODULE_CASES]
+)
 def test_snapshot_tb(case: GoldenCase, request: pytest.FixtureRequest) -> None:
     result = generate_files(case.snippet_id, case.resolved_options)
     tb_file = next((f for f in result.files if f.kind == "tb"), None)
