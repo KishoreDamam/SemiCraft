@@ -22,8 +22,8 @@ One row per directed cycle that carries a `Check` (cycle indices are 0-based, co
 
 | ID | Feature / Intent | Stimulus | Expected Result | Status |
 |---|---|---|---|---|
-| TP-01 | Cycle 1: expected value of `clk_out` | cycle 1: no new stimulus this cycle (holds prior-driven values) | clk_out == 0 | Directed check in generated TB (`$fatal` on mismatch) |
-| TP-02 | Cycle 32769: expected value of `clk_out` | cycle 32769: no new stimulus this cycle (holds prior-driven values) | clk_out == 1 | Directed check in generated TB (`$fatal` on mismatch) |
+| TP-01 | Cycle 0: expected value of `clk_out` | cycle 0: no new stimulus this cycle (holds prior-driven values) | clk_out == 0 | Directed check in generated TB (`$fatal` on mismatch) |
+| TP-02 | Cycle 32768: expected value of `clk_out` | cycle 32768: no new stimulus this cycle (holds prior-driven values) | clk_out == 1 | Directed check in generated TB (`$fatal` on mismatch) |
 
 ## Coverage / Stimulus Summary
 
@@ -62,4 +62,3 @@ One row per directed cycle that carries a `Check` (cycle indices are 0-based, co
 - Directed, not randomized: the smoke TB only runs the fixed vectors in `TbSpec.vectors`; no constrained-random or exhaustive stimulus is attempted.
 - Default parameterization only: the generated TB instantiates the DUT with no parameter overrides, so only the exact configuration used to generate this file is exercised. A different parameterization of the same RTL is not covered by this TB.
 - Single clock/reset domain only: this TB drives one free-running clock and (if present) one reset; it performs no clock-domain-crossing verification.
-- No `Check` samples cycle 0 (the first cycle after reset release): reset behavior runs structurally but is not directly self-checked by this TB.

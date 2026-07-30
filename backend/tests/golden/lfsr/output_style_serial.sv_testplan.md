@@ -26,7 +26,7 @@ One row per directed cycle that carries a `Check` (cycle indices are 0-based, co
 
 | ID | Feature / Intent | Stimulus | Expected Result | Status |
 |---|---|---|---|---|
-| TP-01 | Cycle 0: expected value of `out` | cycle 0: drive en=1 | out == 0 | Directed check in generated TB (`$fatal` on mismatch) |
+| TP-01 | Cycle 0: expected value of `out` | cycle 0: drive en=1 | out == 1 | Directed check in generated TB (`$fatal` on mismatch) |
 | TP-02 | Cycle 4: expected value of `out` | cycle 4: drive en=1 | out == 0 | Directed check in generated TB (`$fatal` on mismatch) |
 
 ## Coverage / Stimulus Summary

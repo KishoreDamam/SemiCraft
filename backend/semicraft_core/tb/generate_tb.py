@@ -245,6 +245,19 @@ def generate_tb(module_def, opts, rtl_module: Module) -> str:
     if reset_net is not None:
         stmts.append(DriveSignal(reset_net, reset_assert, 1))
         stmts.append(WaitCycles(spec.reset_cycles, "posedge"))
+        # Deassert *after* a settle delay, not in the same timestep as the
+        # posedge we just woke on. Deasserting concurrently with that edge is a
+        # drive/sample race against the DUT's own clocked process: for a
+        # synchronous reset the `always_ff @(posedge clk)` may observe the
+        # already-deasserted level and take a real state update on the very edge
+        # the TB still counts as "in reset". A free-running DUT then reads one
+        # count ahead of the tb_spec model at cycle 0, while a DUT gated by an
+        # enable (still 0 at this point) masks the race entirely — which is why
+        # only the no-enable configurations failed the run gate. The `#1` puts
+        # the deassertion unambiguously after the edge, so reset is observed
+        # asserted for exactly `reset_cycles` rising edges and directed cycle 0
+        # sees zero post-reset edges, matching the documented timing model.
+        stmts.append(Delay(_SETTLE_NS))
         stmts.append(DriveSignal(reset_net, reset_deassert, 1))
 
     # Directed cycles: drive vectors on the falling edge, check after settle.

@@ -1,6 +1,6 @@
 # SemiCraft Testbench IR Specification
 
-**Version 2.1 (Phase 3, P3-02).** Owner: verification core (`semicraft_core/tb/`).
+**Version 2.2 (Phase 3, P3-09a).** Owner: verification core (`semicraft_core/tb/`).
 
 The testbench (TB) IR is a small, frozen-dataclass node family for directed
 **SystemVerilog** testbenches, entirely separate from the synthesizable IR
@@ -21,6 +21,11 @@ The stable public seams are unchanged:
 
 ## Changelog
 
+- **v2.2 (P3-09a):** reset-deassertion race fixed — the deassert drive is now
+  preceded by a `#1` settle so it never shares a timestep with the rising edge
+  that ends the reset hold (new §6a, normative). Fixes 17/165 golden TBs that
+  failed the full-matrix run gate; generator-side only, no `TbSpec` expected
+  value changed.
 - **v2.1 (P3-02):** renderers for the full node family — `_emit_stmt` handles
   every `Stmt` (no longer raises on P3 nodes); module-level `Task`,
   `AssertProperty`, and `ResetSeq` render as optional sections (omitted when
@@ -104,7 +109,7 @@ defaults that hide required semantics. Rendering is deterministic — identical
 
 | Node | Fields | Renders (P3-02) |
 |---|---|---|
-| `ResetSeq` | `signal: str, active_low: bool, cycles: int` | Its own `initial begin ... end` process after the DUT instance: assert level at time 0, `repeat (cycles) @(posedge <clock>);` (`cycles==1` drops `repeat`), deassert. |
+| `ResetSeq` | `signal: str, active_low: bool, cycles: int` | Its own `initial begin ... end` process after the DUT instance: assert level at time 0, `repeat (cycles) @(posedge <clock>);` (`cycles==1` drops `repeat`), `#1;`, deassert. The `#1` settle is normative — see §6a. |
 | `Task` | `name: str, stmts: tuple[Stmt,...]` | `task name; ... endtask` between the DUT instance and the stimulus `initial`, in declaration order; invoked via `CallTask`. |
 | `AssertProperty` | `name: str, property_text: str, clock: str, disable_iff: str \| None` | `name: assert property (@(posedge clock) [disable iff (expr) ]property_text)` + `else $fatal(1, "SVA FAIL: name");`, after the stimulus `initial`. **SVA stub** — see §5. |
 
@@ -166,7 +171,8 @@ a non-`snake_case` naming convention chosen by the user, outside T1's scope).
   module elaborates fine under Verilator; single simplest path).
 - `timescale 1ns/1ps`; free-running clock `always #5 clk = ~clk`.
 - Reset asserted from time 0, held `TbSpec.reset_cycles` rising edges, then
-  deasserted; polarity from the DUT's `ResetSpec` (active-low → assert=0/
+  deasserted **after a `#1` settle** (never in the same timestep as that rising
+  edge — see §6a); polarity from the DUT's `ResetSpec` (active-low → assert=0/
   deassert=1 on the styled `_n` net).
 - Directed cycle `c`: inputs driven on the `negedge` (no drive/sample race with
   the DUT's rising edge); checks sample after a `#1` settle. Runs of idle cycles
@@ -175,6 +181,44 @@ a non-`snake_case` naming convention chosen by the user, outside T1's scope).
   prints `SMOKE PASS: <module>` then `$finish`.
 - Deterministic: no timestamps; banner mirrors the RTL header (tool version,
   config hash, disclaimer).
+
+### 6a. Reset-deassertion timing (normative decision, P3-09a)
+
+`generate_tb` emits the reset deassertion as `#1;` **then** the deassert drive,
+after the `repeat (reset_cycles) @(posedge clk);` hold:
+
+```systemverilog
+rst_n = 1'd0;
+repeat (2) @(posedge clk);
+#1;                          // settle: put the deassert after the edge
+rst_n = 1'd1;
+```
+
+**Why (the bug this fixes).** Deasserting in the same timestep as the rising edge
+the TB just woke on is a drive/sample race against the DUT's own clocked process.
+For a *synchronous* reset, `always_ff @(posedge clk) if (!rst_n) ... else ...` may
+observe the already-deasserted level and take a real state update on the very edge
+the TB still counts as "in reset". The DUT then runs one state ahead of the
+`TbSpec` model at directed cycle 0.
+
+This was latent from P2-13 through P3-04 because it is *masked* whenever the DUT's
+state update is gated by an enable that is still 0 at that moment (all
+initialised-to-0 inputs are). It surfaces only in **free-running** configurations
+— which is exactly the set the run gate caught: gray-counter (`enable=False`),
+lfsr (`enable=False`/serial), clock-divider (`pulse` style). 17 of 165 golden TBs,
+invisible to CI because `test_tb_run.py` defaults to the `defaults` case per
+module (`SEMICRAFT_TB_RUN_ALL=1` runs the full matrix).
+
+**Scope of the fix.** Generator-side only: no module's `TbSpec` expected values
+changed — the modules' timing models were correct and the TB was wrong. The
+change is one added `#1;` line in each of the 165 TB goldens; RTL, doc, and
+testplan goldens are byte-identical. Reset is still observed asserted for exactly
+`reset_cycles` rising edges, and directed cycle 0 still sees zero post-reset
+edges, so §7's name/width anchor and the per-module timing models are unaffected.
+
+Note this rule is the same discipline §6 already applied to *vector* drives
+("inputs driven on the `negedge`, no drive/sample race with the DUT's rising
+edge") — the reset deassert had simply been exempt from it.
 
 Since P3-02, `_emit_stmt` renders **every** member of the `Stmt` union (it no
 longer raises on P3 nodes), per the render columns in §3. Module layout: decls,

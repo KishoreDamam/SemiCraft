@@ -253,6 +253,9 @@ def test_reset_seq_active_low() -> None:
         "    initial begin\n"
         f"{_I2}rst_n = 1'd0;\n"
         f"{_I2}repeat (2) @(posedge clk);\n"
+        # `#1` settle before the deassert is normative (TB_SPEC §6a): it keeps the
+        # deassert out of the same timestep as the edge that ends the hold.
+        f"{_I2}#1;\n"
         f"{_I2}rst_n = 1'd1;\n"
         "    end\n"
     )
@@ -266,6 +269,7 @@ def test_reset_seq_active_high_single_cycle_drops_repeat() -> None:
     expected = (
         f"{_I2}rst = 1'd1;\n"
         f"{_I2}@(posedge clk);\n"
+        f"{_I2}#1;\n"  # normative settle, TB_SPEC §6a
         f"{_I2}rst = 1'd0;\n"
     )
     assert expected in text

@@ -21,7 +21,7 @@ Single-bit combinational feedback output.
 
 | Port | Direction | Description |
 | --- | --- | --- |
-| `out` | output | Combinational feedback bit (XOR of the tap bits of the current state). |
+| `out` | output | Serial output: q[0], the bit shifted out of the register this cycle. |
 
 ## Configuration
 

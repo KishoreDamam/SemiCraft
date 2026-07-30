@@ -36,6 +36,7 @@ module clock_divider_tb;
         // Initialise inputs and assert reset
         rst = 1'd1;
         repeat (2) @(posedge clk);
+        #1;
         rst = 1'd0;
         // Apply directed vectors; sample checks on the falling edge
         repeat (2) @(negedge clk);

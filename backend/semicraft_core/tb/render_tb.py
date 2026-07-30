@@ -214,7 +214,14 @@ def _emit_stmt(w: _Writer, s: Stmt, scope: str) -> None:
 
 
 def _emit_reset_seq(w: _Writer, rs: ResetSeq, clock: str) -> None:
-    """Declarative reset process: assert at time 0, hold, deassert."""
+    """Declarative reset process: assert at time 0, hold, settle, deassert.
+
+    The ``#1`` before the deassert is normative (TB_SPEC §6a): deasserting in the
+    same timestep as the rising edge that ends the hold races the DUT's own
+    clocked process, which may then take a state update on an edge the testbench
+    still counts as "in reset". ``generate_tb`` emits the same settle for its
+    inline reset; both reset paths follow the rule.
+    """
     assert_level = 0 if rs.active_low else 1
     deassert_level = 1 - assert_level
     w.line("// Reset sequence")
@@ -225,6 +232,7 @@ def _emit_reset_seq(w: _Writer, rs: ResetSeq, clock: str) -> None:
         w.line(f"@(posedge {clock});")
     else:
         w.line(f"repeat ({rs.cycles}) @(posedge {clock});")
+    w.line("#1;")
     w.line(f"{rs.signal} = {_lit(deassert_level, 1)};")
     w.dedent()
     w.line("end")

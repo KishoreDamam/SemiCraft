@@ -62,7 +62,7 @@ Updated: 2026-07-29. Keep current — this file is the session-handoff state.
 |---|---|---|
 | P3-01 TB node family | DONE, committed b16cffd, pushed | 70 tests; full family + validate_tb T1-T8; goldens byte-identical; TB_SPEC v2 |
 | P3-03a sim runner + run gate | DONE, committed 1adb9cf, pushed | 10 mocked tests; advisory run gate in CI — CHECK ITS LOG for tb_spec value failures (follow-up WP) |
-| run-gate first execution | DONE — 12/14 cold pass; clock-divider check-timing bug fixed (71a4c01); gate now ENFORCING | timing model recorded in clock_divider.py: at TB cycle c, c-1 post-reset edges elapsed |
+| run-gate first execution | DONE — 12/14 cold pass; clock-divider check-timing bug fixed (71a4c01); gate now ENFORCING | ~~timing model recorded in clock_divider.py: at TB cycle c, c-1 post-reset edges elapsed~~ **SUPERSEDED at P3-09a** — that `c-1` was reverse-engineered from a testbench with a reset-deassertion race, not real divider behavior. Correct model: at cycle c, exactly c post-reset edges. See "Full TB run matrix" below |
 | P3-02 TB renderers | DONE, committed d76efc0, pushed | render_tb renders full node family (fork/join, tasks, timeout, dump, AssertProperty, ResetSeq); P2 goldens byte-identical; generate_tb did NOT adopt ResetSeq (byte-identity unproven, TB_SPEC §3.2); new tb/scripts.py run.sh/Makefile emitter; TB_SPEC v2.1. Agent cut at limit ~99% done, orchestrator verified inline |
 | P3-05 SVA assertion generator | DONE, committed 3edc147, pushed | standalone semicraft_core/assertions: AssertionSpec -> AssertProperty tuple; families: reset-known-value, stability, handshake, onehot/onehot0, value-range, no-X; docs/ASSERTIONS.md; NOT wired into generate_files yet (later WP). 2413 backend tests green |
 | P3-03 sim sandbox service | DONE, committed b25e693, pushed | POST /api/v2/simulate over run_smoke; status pass/fail/unavailable/no_tb/error; degrades to "unavailable" HTTP 200 (no Verilator locally); frontend Run button + SimPanel log viewer. 15 backend + 9 frontend tests; v2 additive |
@@ -72,7 +72,7 @@ Updated: 2026-07-29. Keep current — this file is the session-handoff state.
 | P3-07 test-plan doc gen | DONE, committed 596d81c | semicraft_core/testplan.py -> `<module>_testplan.md` as a SECOND doc-kind file appended after the datasheet (datasheet stays files[]'s first doc entry, so `next(f for f in files if f.kind=="doc")` still resolves to it). 165 testplan goldens; all pre-existing rtl/doc/tb goldens byte-identical. Gap list (undriven inputs / unchecked outputs) reports "None found" on all current modules — verified genuinely true, and the logic has synthetic tests proving it fires both ways. docs/TESTPLAN.md |
 | Next | **P3-09 first — it now has a concrete bug list (see "Full TB run matrix" below), not just a release checklist.** Then P3-08 cocotb beta (dep P3-03) | 2-agent budget per session |
 
-## Full TB run matrix — 17 pre-existing failures (found 2026-07-29)
+## Full TB run matrix — 17 pre-existing failures (found + fixed 2026-07-29)
 
 **Verilator IS available in Linux remote containers** (`apt-get install -y
 verilator` → 5.020). The "no Verilator locally" note under Environment facts
@@ -92,18 +92,54 @@ Failing cases: gray-counter (`enable_off` sv+v, `verilog_no_enable_wide`,
 `verilog_serial_width16`), clock-divider (`pulse_style.v`,
 `verilog_pulse_wide.v`).
 
-Root cause (traced in `modules/gray_counter.py` tb_spec, lines ~232-243) —
-an off-by-one *edge*, not an off-by-one cycle: the `bins[i]` model assumes the
-counter has taken `i` post-reset edges when TB cycle `i` is sampled. That holds
-**only when `enable` is set**, because `en` initialises to 0 and is not driven
-high until cycle 0's negedge, so the posedge between reset deassertion and the
-cycle-0 sample does not increment. With `enable` **off** the counter is
-free-running, that edge *does* increment, and actual `gray` at cycle 0 is 1,
-not 0 (`SMOKE FAIL: gray at cycle 0 expected 0, got 1`). The no-enable configs
-need `bins[c+1]`. lfsr's enable_off/serial variants and clock-divider's
-pulse variants are very likely the same shape — confirm per module rather than
-assuming.
+### RESOLVED (P3-09a) — and the first diagnosis here was wrong
 
-Fix the modules' TbSpec expected values (never the gate), regenerate the TB
-goldens, then re-run the full matrix. Consider making the full matrix the CI
-default once green — `defaults`-only is precisely what let this sit unnoticed.
+The original entry blamed per-module expected values and prescribed
+`bins[c+1]` in `gray_counter.py`. **That was wrong** — do not follow it. There
+were two independent defects, and the dominant one was generator-side.
+
+**Defect 1 — reset-deassertion race (`tb/generate_tb.py`, 15 of the 17).**
+`generate_tb` drove the reset deassert in the *same timestep* as the rising edge
+ending the reset hold, racing the DUT's own `always_ff @(posedge clk)`. A sync
+reset can be observed already-deasserted on that edge, so the DUT takes a real
+state update on an edge the TB still counts as "in reset". Masked whenever the
+state update is gated by an enable still at 0 (all inputs initialise to 0) —
+hence only *free-running* configs failed. Note TB_SPEC §6 already required this
+discipline for vector drives ("no drive/sample race with the DUT's rising
+edge"); the reset deassert was simply exempt from the generator's own rule.
+Fixed by a `#1` settle before the deassert, now **normative in TB_SPEC §6a
+(v2.2)**; the same settle was applied to `render_tb`'s `ResetSeq` path, which
+had the identical race. Diff across all 165 TB goldens is one added `#1;` line;
+**no module's expected values changed by this fix.**
+
+**Defect 2 — expectations reverse-engineered from the racy sim.**
+Fixing defect 1 *broke* clock-divider `defaults` + all 8 `reset_*` variants
+(while fixing `pulse_style`). Cause: those toggle checks carried the comment
+"Observed sim timing (first CI run-gate execution): at TB cycle c, c-1
+post-reset rising edges have elapsed" — values reverse-engineered from the
+**racy** run at 71a4c01, so they had encoded the bug as ground truth. Re-derived
+from the RTL as `clk_out = (c // half) % 2` with exactly `c` post-reset edges
+(checks now at cycle 0 → 0 and cycle `half` → 1), and verified against the DUT
+by probe for `divide_by` 2 and 10 before changing any expectation.
+
+**Defect 3 — lfsr serial model vs RTL (the remaining 5).**
+`lfsr.py`'s `_observed` predicted the *feedback* bit for `output_style="serial"`,
+but the RTL drives `assign out = q[0]` (the shifted-out bit, deliberate — its
+inline comment calls it the conventional serial output and notes it also avoids
+Verilator UNUSEDSIGNAL). The module's *documentation* was the stale part and said
+"combinational feedback bit" in four places. Model corrected to `q_val & 1`; all
+four doc sites corrected to describe `q[0]`. Verified by probe over 7 cycles.
+The 5 serial cases' rtl/doc goldens change by the port **comment only** — the
+`assign out = q[0]` logic is untouched.
+
+**Lesson worth keeping:** never calibrate a `TbSpec` expected value from
+observed simulation output. Derive it from the RTL and let the sim *disagree* —
+an expectation fitted to a buggy sim silently freezes the bug, and here it also
+misdirected the follow-up diagnosis. `clock_divider.py`'s comment now says the
+checks are derived, not observed.
+
+**CI gap that hid all of this:** `test_tb_run.py` defaults to the `defaults`
+case per module; `SEMICRAFT_TB_RUN_ALL=1` runs the full 165-case matrix
+(~20 min). Making the full matrix a nightly/manually-dispatchable CI job is the
+open recommendation — a per-push job would add ~20 min to every push, which is a
+cost decision for the user, not a silent change.

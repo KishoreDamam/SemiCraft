@@ -36,17 +36,18 @@ module clock_divider_tb;
         // Initialise inputs and assert reset
         rst_n = 1'd0;
         repeat (2) @(posedge clk);
+        #1;
         rst_n = 1'd1;
         // Apply directed vectors; sample checks on the falling edge
-        repeat (2) @(negedge clk);
+        @(negedge clk);
         #1;
         if (clk_out !== 1'd0) begin
-            $fatal(1, "SMOKE FAIL: clk_out at cycle 1 expected 0, got %0d", clk_out);
+            $fatal(1, "SMOKE FAIL: clk_out at cycle 0 expected 0, got %0d", clk_out);
         end
         repeat (128) @(negedge clk);
         #1;
         if (clk_out !== 1'd1) begin
-            $fatal(1, "SMOKE FAIL: clk_out at cycle 129 expected 1, got %0d", clk_out);
+            $fatal(1, "SMOKE FAIL: clk_out at cycle 128 expected 1, got %0d", clk_out);
         end
         $display("SMOKE PASS: clock_divider");
         $finish;
