@@ -30,6 +30,7 @@ from typing import Literal
 
 from pydantic import Field
 
+from ..assertions.spec import AssertionSpec, ResetContext, ResetKnownValue
 from ..ir.build import IN, OUT, bit, vec
 from ..ir.nodes import (
     AlwaysFF,
@@ -289,12 +290,44 @@ def tb_spec(opts: EdgeDetectorOptions) -> TbSpec:
     elif opts.detect == "falling":
         checks.append(Check(cycle=4 + latency, signal="pulse", expected=lo))
 
+    # Concurrent SVA (P3-05a wiring). Canonical names; generate_tb restyles them.
+    #
+    # Attached only when ``registered_output`` is set. In that mode ``pulse`` is
+    # a flop cleared by reset, so "0 out of reset" is a property of the design.
+    # With ``registered_output=False`` ``pulse`` is a combinational ContAssign
+    # of ``d & ~d_q``, so its value during reset follows the inputs and
+    # asserting 0 would be false — the module attaches nothing rather than a
+    # property that only usually holds.
+    assertion_spec = None
+    if opts.registered_output:
+        assertion_spec = AssertionSpec(
+            clock="clk",
+            items=[
+                # width is opts.width, not 1: `pulse` is per-bit, so a wide
+                # configuration needs a wide literal. A hardcoded 1 emitted
+                # `pulse == 1'd0` against an 8-bit net, which Verilator flags
+                # WIDTHEXPAND — and the golden run gate promotes to an error.
+                ResetKnownValue(
+                    name="pulse_reset_value",
+                    signal="pulse",
+                    value=0,
+                    width=opts.width,
+                )
+            ],
+            reset=ResetContext(
+                signal="rst",
+                active_low=opts.reset_polarity == "active_low",
+                sync=opts.reset_style == "sync",
+            ),
+        )
+
     return TbSpec(
         clock="clk",
         reset="rst",
         reset_cycles=2,
         vectors=vectors,
         checks=checks,
+        assertion_spec=assertion_spec,
     )
 
 

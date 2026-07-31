@@ -62,6 +62,13 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
+from ..assertions.spec import (
+    AssertionItem,
+    AssertionSpec,
+    ResetContext,
+    ResetKnownValue,
+    Stability,
+)
 from ..ir.build import IN, OUT, bit, vec
 from ..ir.nodes import (
     AlwaysFF,
@@ -414,12 +421,45 @@ def tb_spec(opts: LfsrOptions) -> TbSpec:
         ),
     ]
 
+    # Concurrent SVA (P3-05a wiring). Canonical names; generate_tb restyles them.
+    #
+    # The reset value depends on the output style, exactly as `_observed` does:
+    # `parallel` exposes the whole register (reset value INIT), while `serial`
+    # exposes q[0] only, so the expected value is INIT's low bit. Reusing the
+    # same derivation as the directed checks keeps the two from drifting apart —
+    # drift there is what shipped a broken serial model before P3-09a.
+    reset_value = opts.init_value if signal == "q" else opts.init_value & 1
+    reset_width = opts.width if signal == "q" else 1
+    assertion_items: list[AssertionItem] = [
+        ResetKnownValue(
+            name=f"{signal}_reset_value",
+            signal=signal,
+            value=reset_value,
+            width=reset_width,
+        )
+    ]
+    if opts.enable:
+        assertion_items.append(
+            Stability(name=f"{signal}_stable_when_disabled", signal=signal, enable="en")
+        )
+
+    assertion_spec = AssertionSpec(
+        clock="clk",
+        items=assertion_items,
+        reset=ResetContext(
+            signal="rst",
+            active_low=opts.reset_polarity == "active_low",
+            sync=opts.reset_style == "sync",
+        ),
+    )
+
     return TbSpec(
         clock="clk",
         reset="rst",
         reset_cycles=2,
         vectors=vectors,
         checks=checks,
+        assertion_spec=assertion_spec,
     )
 
 

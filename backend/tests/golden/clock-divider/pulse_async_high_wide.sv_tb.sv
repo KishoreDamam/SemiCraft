@@ -53,4 +53,8 @@ module clock_divider_tb;
         $finish;
     end
 
+    // Concurrent assertions (SVA)
+    clk_out_reset_value: assert property (@(posedge clk) $fell(rst) |-> clk_out == 1'd0)
+        else $fatal(1, "SVA FAIL: clk_out_reset_value");
+
 endmodule

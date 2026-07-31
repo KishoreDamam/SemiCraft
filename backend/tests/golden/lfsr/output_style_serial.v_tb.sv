@@ -66,4 +66,10 @@ module lfsr_tb;
         $finish;
     end
 
+    // Concurrent assertions (SVA)
+    out_reset_value: assert property (@(posedge clk) $rose(rst_n) |-> out == 1'd1)
+        else $fatal(1, "SVA FAIL: out_reset_value");
+    out_stable_when_disabled: assert property (@(posedge clk) disable iff (!rst_n) !en |=> $stable(out))
+        else $fatal(1, "SVA FAIL: out_stable_when_disabled");
+
 endmodule

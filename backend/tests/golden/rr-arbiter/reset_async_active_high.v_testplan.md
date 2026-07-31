@@ -55,7 +55,12 @@ One row per directed cycle that carries a `Check` (cycle indices are 0-based, co
 
 ## Assertions (SVA)
 
-`TbSpec.assertion_spec` is `None`: no concurrent SVA assertions are generated for this module. The Test Plan above is the entire self-checking surface of the generated TB.
+The properties below are the *actual* output of `assertions.generate_assertions(tb_spec.assertion_spec)` — the same call `generate_tb` makes — so this table cannot drift from the concurrent-assertion block the TB emits.
+
+| Name | Property | Clock | Guard |
+|---|---|---|---|
+| `grant_onehot0` | `$onehot0(grant)` | `clk` | `disable iff (rst)` |
+| `grant_reset_value` | `$fell(rst) |-> grant == 4'd0` | `clk` | none |
 
 ## Not Covered / Limitations
 

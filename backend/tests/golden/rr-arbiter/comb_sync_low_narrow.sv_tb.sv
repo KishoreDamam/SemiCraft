@@ -79,4 +79,8 @@ module rr_arbiter_tb;
         $finish;
     end
 
+    // Concurrent assertions (SVA)
+    grant_onehot0: assert property (@(posedge clk) disable iff (!rst_n) $onehot0(grant))
+        else $fatal(1, "SVA FAIL: grant_onehot0");
+
 endmodule

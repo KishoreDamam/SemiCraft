@@ -149,10 +149,26 @@ def test_port_constraint_bounds_driven_value() -> None:
 # --------------------------------------------------------------------------- #
 
 
-# Modules that now attach a real ``TbSpec.assertion_spec`` (P3-05a wiring).
-# Every other catalog module still leaves the hook unused, so this set is the
-# boundary between "emits SVA" and "does not" — extend it as modules are wired.
-_MODULES_WITH_ASSERTIONS = {"gray-counter"}
+# Modules that attach a real ``TbSpec.assertion_spec`` (P3-05a wiring), under
+# *default* options — which is what ``_tb`` builds.
+#
+# pwm is deliberately absent: only its counter is reset and `pwm_out` is
+# combinational from it, so there is no reset value that is true of every
+# configuration. Attaching a property that merely usually holds would be worse
+# than attaching none.
+#
+# edge-detector is present because `registered_output` defaults to True, making
+# `pulse` a flop with a real reset value. Its combinational-output cases emit no
+# SVA — covered by test_edge_detector_combinational_output_has_no_sva below,
+# since this parametrization only ever sees default options.
+_MODULES_WITH_ASSERTIONS = {
+    "clock-divider",
+    "debouncer",
+    "edge-detector",
+    "gray-counter",
+    "lfsr",
+    "rr-arbiter",
+}
 
 
 @pytest.mark.parametrize("item_id", MODULE_IDS)
@@ -174,18 +190,61 @@ def test_assertion_hook_emits_sva_only_for_wired_modules(item_id: str) -> None:
         assert "Concurrent assertions (SVA)" not in tb
 
 
+def test_edge_detector_combinational_output_has_no_sva() -> None:
+    """`registered_output=False` makes `pulse` a continuous assign.
+
+    There is then no reset value to assert — `pulse` follows `d` even while
+    reset is asserted — so the module must attach nothing rather than a
+    property that only holds in the registered configuration.
+    """
+    from semicraft_core.modules import edge_detector
+
+    opts = edge_detector.MODULE.options_model.model_validate({"registered_output": False})
+    assert edge_detector.MODULE.tb_spec(opts).assertion_spec is None
+
+    opts_registered = edge_detector.MODULE.options_model.model_validate(
+        {"registered_output": True}
+    )
+    assert edge_detector.MODULE.tb_spec(opts_registered).assertion_spec is not None
+
+
+def test_pwm_attaches_no_assertion_spec() -> None:
+    """pwm is intentionally unwired — see _MODULES_WITH_ASSERTIONS.
+
+    Pinned so that "pwm has no SVA" stays a deliberate decision with a stated
+    reason, rather than something that could be silently changed.
+    """
+    opts = pwm.MODULE.options_model.model_validate({})
+    assert pwm.MODULE.tb_spec(opts).assertion_spec is None
+
+
 @pytest.mark.parametrize("item_id", sorted(_MODULES_WITH_ASSERTIONS))
 def test_wired_module_assertions_use_rendered_reset_name(item_id: str) -> None:
-    """Guard expressions must name the *rendered* reset net, not the canonical one.
+    """Assertion text must name the *rendered* reset net, not the canonical one.
 
     A module writes canonical names (``rst``); ``build_name_map`` renders an
     active-low reset as ``rst_n``. Without the restyle step in ``generate_tb``
-    the emitted guard would reference a net that does not exist — and since
+    the emitted text would reference a net that does not exist — and since
     active-low is the default, that would be broken out of the box.
+
+    The reset name reaches the text by two different routes, so this checks the
+    net name rather than one idiom: a guarded item emits ``disable iff (!rst_n)``,
+    while ``ResetKnownValue`` emits ``$rose(rst_n)`` and is deliberately
+    *unguarded* (it is the assertion *about* reset, so disabling it during reset
+    would defeat it). Modules carrying only that item therefore have no
+    ``disable iff`` at all.
     """
     tb = _tb(item_id)  # default options => active-low reset
-    assert "disable iff (!rst_n)" in tb
-    assert "disable iff (!rst)" not in tb
+    sva = tb[tb.index("// Concurrent assertions (SVA)") :]
+
+    assert "rst_n" in sva
+    # No bare canonical `rst` anywhere in the SVA block. `\brst\b` cannot match
+    # inside `rst_n` (`_` is a word character), so this catches exactly the
+    # unrestyled spelling.
+    assert re.search(r"\brst\b", sva) is None, (
+        f"{item_id}: SVA block references the canonical reset name rather than "
+        f"the rendered one:\n{sva}"
+    )
 
 
 def test_assertion_spec_wires_into_tb() -> None:

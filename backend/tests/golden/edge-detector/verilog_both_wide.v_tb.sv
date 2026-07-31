@@ -66,4 +66,8 @@ module edge_detector_tb;
         $finish;
     end
 
+    // Concurrent assertions (SVA)
+    pulse_reset_value: assert property (@(posedge clk) $rose(rst_n) |-> pulse == 4'd0)
+        else $fatal(1, "SVA FAIL: pulse_reset_value");
+
 endmodule

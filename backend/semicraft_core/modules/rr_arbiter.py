@@ -78,6 +78,13 @@ from typing import Literal
 
 from pydantic import Field
 
+from ..assertions.spec import (
+    AssertionItem,
+    AssertionSpec,
+    OneHot,
+    ResetContext,
+    ResetKnownValue,
+)
 from ..ir.build import IN, OUT, bit, vec
 from ..ir.nodes import (
     AlwaysFF,
@@ -403,12 +410,43 @@ def tb_spec(opts: RrArbiterOptions) -> TbSpec:
         Check(cycle=7 + latency, signal="grant_valid", expected=0),
     ]
 
+    # Concurrent SVA (P3-05a wiring). Canonical names; generate_tb restyles them.
+    #
+    # The one-hot-or-zero property is the arbiter's defining invariant — at most
+    # one requester may hold a grant in any cycle — and it holds for both grant
+    # styles: the two-pass mask scheme selects a single winner, and all-zero is
+    # legal when nothing is requesting, hence onehot0 rather than onehot.
+    #
+    # The reset-value property is attached only for the *registered* style,
+    # where `grant` is a flop cleared on reset. With a combinational grant,
+    # `grant` is a continuous assignment driven by `req`, so it is whatever the
+    # inputs imply even while reset is asserted, and asserting 0 there would be
+    # false.
+    assertion_items: list[AssertionItem] = [
+        OneHot(name="grant_onehot0", signal="grant", allow_zero=True)
+    ]
+    if opts.grant_style == "registered":
+        assertion_items.append(
+            ResetKnownValue(name="grant_reset_value", signal="grant", value=0, width=n)
+        )
+
+    assertion_spec = AssertionSpec(
+        clock="clk",
+        items=assertion_items,
+        reset=ResetContext(
+            signal="rst",
+            active_low=opts.reset_polarity == "active_low",
+            sync=opts.reset_style == "sync",
+        ),
+    )
+
     return TbSpec(
         clock="clk",
         reset="rst",
         reset_cycles=2,
         vectors=vectors,
         checks=checks,
+        assertion_spec=assertion_spec,
     )
 
 

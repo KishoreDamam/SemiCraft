@@ -70,4 +70,8 @@ module debouncer_tb;
         $finish;
     end
 
+    // Concurrent assertions (SVA)
+    q_reset_value: assert property (@(posedge clk) $fell(rst) |-> q == 1'd1)
+        else $fatal(1, "SVA FAIL: q_reset_value");
+
 endmodule

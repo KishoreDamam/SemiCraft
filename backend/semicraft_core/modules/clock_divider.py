@@ -37,6 +37,7 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
+from ..assertions.spec import AssertionSpec, ResetContext, ResetKnownValue
 from ..ir.build import IN, OUT, bit, vec
 from ..ir.nodes import (
     AlwaysFF,
@@ -313,12 +314,27 @@ def tb_spec(opts: ClockDividerOptions) -> TbSpec:
         checks.append(Check(cycle=1, signal="clk_out", expected=0))
         checks.append(Check(cycle=opts.divide_by, signal="clk_out", expected=1))
 
+    # Concurrent SVA (P3-05a wiring). Canonical names; generate_tb restyles them.
+    # Both output styles reset `clk_out` to 0 in the same always_ff, so the
+    # reset-value property is unconditional here. No stability property: this
+    # module has no enable, and clk_out legitimately changes on its own schedule.
+    assertion_spec = AssertionSpec(
+        clock="clk",
+        items=[ResetKnownValue(name="clk_out_reset_value", signal="clk_out", value=0, width=1)],
+        reset=ResetContext(
+            signal="rst",
+            active_low=opts.reset_polarity == "active_low",
+            sync=opts.reset_style == "sync",
+        ),
+    )
+
     return TbSpec(
         clock="clk",
         reset="rst",
         reset_cycles=2,
         vectors=vectors,
         checks=checks,
+        assertion_spec=assertion_spec,
     )
 
 
