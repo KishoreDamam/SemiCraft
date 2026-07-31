@@ -291,13 +291,23 @@ def tb_spec(opts: ClockDividerOptions) -> TbSpec:
     checks: list[Check] = []
     if opts.output_enable_style == "toggle":
         half = opts.divide_by // 2
-        # Observed sim timing (first CI run-gate execution): at TB cycle c,
-        # c-1 post-reset rising edges have elapsed, so clk_out = ((c-1)//half)
-        # % 2. Cycle 1 is therefore always still 0, and the first flip is
-        # visible at cycle half+1 (checking at cycle=half collided with the
-        # zero check for divide_by=2 and sampled one edge too early).
-        checks.append(Check(cycle=half + 1, signal="clk_out", expected=1))
-        checks.append(Check(cycle=1, signal="clk_out", expected=0))
+        # Timing model (TB_SPEC §6a): at TB cycle c, exactly c post-reset rising
+        # edges have elapsed, so clk_out = (c // half) % 2. Cycle 0 samples the
+        # reset value (0 edges elapsed) and the first flip is visible at cycle
+        # `half`.
+        #
+        # This replaces an earlier model that read `c-1` edges at cycle c. That
+        # off-by-one was not the divider's behavior: it was reverse-engineered
+        # from the first CI run-gate execution, which ran against a testbench
+        # that deasserted reset in the same timestep as the rising edge ending
+        # the reset hold. That race cost the DUT its first post-reset edge. With
+        # the race fixed generator-side, the honest model is the one derived
+        # from the RTL, and these checks are derived, not observed.
+        #
+        # For divide_by=2 (half=1) the two cycles are 0 and 1 — distinct, so the
+        # collision the previous model worked around cannot recur.
+        checks.append(Check(cycle=half, signal="clk_out", expected=1))
+        checks.append(Check(cycle=0, signal="clk_out", expected=0))
     else:
         # clk_out is 0 except on the single wrap cycle each period.
         checks.append(Check(cycle=1, signal="clk_out", expected=0))

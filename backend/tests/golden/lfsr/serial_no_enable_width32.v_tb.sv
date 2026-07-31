@@ -36,6 +36,7 @@ module lfsr_tb;
         // Initialise inputs and assert reset
         rst_n = 1'd0;
         repeat (2) @(posedge clk);
+        #1;
         rst_n = 1'd1;
         // Apply directed vectors; sample checks on the falling edge
         @(negedge clk);
@@ -45,8 +46,8 @@ module lfsr_tb;
         end
         repeat (6) @(negedge clk);
         #1;
-        if (out !== 1'd1) begin
-            $fatal(1, "SMOKE FAIL: out at cycle 6 expected 1, got %0d", out);
+        if (out !== 1'd0) begin
+            $fatal(1, "SMOKE FAIL: out at cycle 6 expected 0, got %0d", out);
         end
         $display("SMOKE PASS: lfsr");
         $finish;

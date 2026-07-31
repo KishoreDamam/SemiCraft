@@ -41,6 +41,7 @@ module rr_arbiter_tb;
         req = 16'd0;
         rst_n = 1'd0;
         repeat (2) @(posedge clk);
+        #1;
         rst_n = 1'd1;
         // Apply directed vectors; sample checks on the falling edge
         @(negedge clk);

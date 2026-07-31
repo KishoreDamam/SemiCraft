@@ -50,9 +50,9 @@ Output styles
 - ``parallel``: the full register state is exposed as the port
   ``q[WIDTH-1:0]``.
 - ``serial``: no parallel ``q`` port; instead a single-bit port ``out``
-  exposes the *feedback* bit computed combinationally from the current
-  register state (the bit that will be shifted into the MSB on the next
-  active edge). ``q`` still exists as an internal signal in this style.
+  exposes ``q[0]`` — the bit shifting *out* of the register this cycle, which
+  is the conventional LFSR serial output (the m-sequence). ``q`` still exists
+  as an internal signal in this style.
 """
 
 from __future__ import annotations
@@ -142,7 +142,7 @@ class LfsrOptions(ClockedOptions):
         description=(
             "'parallel': expose the full register state as q[WIDTH-1:0]. "
             "'serial': no parallel q port; expose a single-bit 'out' port "
-            "carrying the combinational feedback bit instead."
+            "carrying q[0], the bit shifted out each cycle, instead."
         ),
     )
 
@@ -210,7 +210,7 @@ def generate(opts: LfsrOptions) -> Module:
     Structure: one ``AlwaysFF`` holding the register ``q`` (shift-right with
     XOR feedback into the MSB, gated by ``en`` when the enable option is
     set); when ``output_style="serial"`` an additional ``ContAssign`` exposes
-    the combinational feedback bit as ``out``.
+    ``q[0]`` — the bit shifted out this cycle — as ``out``.
 
     The renderer decides always_ff vs always, ``<=`` vs ``=``, and reset
     composition (IR_SPEC design rules 2-4); the generator only chooses the
@@ -388,12 +388,21 @@ def tb_spec(opts: LfsrOptions) -> TbSpec:
         states.append(nxt)
 
     def _observed(cycle: int) -> int:
-        """Value of the chosen output signal at a given cycle."""
+        """Value of the chosen output signal at a given cycle.
+
+        In ``serial`` style the RTL drives ``assign out = q[0]`` (the bit
+        shifting out this cycle), so the model reads bit 0 of the state. It
+        previously returned the *feedback* bit from ``_sim_step`` — matching the
+        module's then-stale port documentation rather than its logic — which is
+        why every serial configuration failed the full-matrix run gate
+        (``SMOKE FAIL: out at cycle 0 expected 0, got 1``: with INIT=1 the seed
+        is ``8'h01``, so ``q[0]`` is 1 while the feedback of that state is 0).
+        The docs are now corrected to describe ``q[0]`` as well.
+        """
         q_val = states[cycle]
         if signal == "q":
             return q_val
-        _, fb = _sim_step(q_val, opts)
-        return fb
+        return q_val & 1
 
     hold_cycle = 4  # first cycle after the held (en=0) transition, if enabled
     checks: list[Check] = [
@@ -431,7 +440,7 @@ def _reset_doc(opts: LfsrOptions) -> str:
 
 
 def _out_doc(opts: LfsrOptions) -> str:
-    return "Combinational feedback bit (XOR of the tap bits of the current state)"
+    return "Serial output: q[0], the bit shifted out of the register this cycle"
 
 
 def _reset_behavior_text(opts: LfsrOptions) -> str:

@@ -39,6 +39,7 @@ module debouncer_tb;
         d_in = 1'd0;
         rst = 1'd1;
         repeat (2) @(posedge clk);
+        #1;
         rst = 1'd0;
         // Apply directed vectors; sample checks on the falling edge
         @(negedge clk);

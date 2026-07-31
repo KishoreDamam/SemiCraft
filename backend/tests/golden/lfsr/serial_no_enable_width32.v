@@ -11,7 +11,7 @@ module lfsr #(
 ) (
     input  wire clk,     // Clock
     input  wire rst_n,   // Sync reset, active-low
-    output wire out      // Combinational feedback bit (XOR of the tap bits of the current state)
+    output wire out      // Serial output: q[0], the bit shifted out of the register this cycle
 );
 
     reg [WIDTH-1:0] q;  // Internal LFSR register state (no parallel output port)

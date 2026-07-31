@@ -39,13 +39,14 @@ module lfsr_tb;
         en = 1'd0;
         rst_n = 1'd0;
         repeat (2) @(posedge clk);
+        #1;
         rst_n = 1'd1;
         // Apply directed vectors; sample checks on the falling edge
         @(negedge clk);
         en = 1'd1;
         #1;
-        if (out !== 1'd0) begin
-            $fatal(1, "SMOKE FAIL: out at cycle 0 expected 0, got %0d", out);
+        if (out !== 1'd1) begin
+            $fatal(1, "SMOKE FAIL: out at cycle 0 expected 1, got %0d", out);
         end
         @(negedge clk);
         en = 1'd1;
