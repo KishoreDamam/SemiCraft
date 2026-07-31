@@ -33,6 +33,13 @@ from dataclasses import dataclass
 
 from pydantic import Field
 
+from ..assertions.spec import (
+    AssertionItem,
+    AssertionSpec,
+    ResetContext,
+    ResetKnownValue,
+    Stability,
+)
 from ..ir.build import IN, OUT, bit, vec
 from ..ir.nodes import (
     AlwaysFF,
@@ -243,12 +250,38 @@ def tb_spec(opts: GrayCounterOptions) -> TbSpec:
         Check(cycle=hold_cycle, signal="gray", expected=_to_gray(bins[hold_cycle])),
     ]
 
+    # Concurrent SVA alongside the directed checks (P3-05a wiring). Names are
+    # canonical; generate_tb restyles them through the render name map, so an
+    # active-low reset here becomes `rst_n` in the emitted guard.
+    #
+    # Only properties that hold for *every* configuration of this module are
+    # attached, because the same spec is emitted for all of them:
+    #  - the counter is 0 out of reset, so gray (= bin ^ bin>>1) is 0 too;
+    #  - when the enable option exists, deasserting it must freeze `gray`.
+    # No value-range property: `gray` legitimately spans the full width.
+    items: list[AssertionItem] = [
+        ResetKnownValue(name="gray_reset_value", signal="gray", value=0, width=opts.width)
+    ]
+    if opts.enable:
+        items.append(Stability(name="gray_stable_when_disabled", signal="gray", enable="en"))
+
+    assertion_spec = AssertionSpec(
+        clock="clk",
+        items=items,
+        reset=ResetContext(
+            signal="rst",
+            active_low=opts.reset_polarity == "active_low",
+            sync=opts.reset_style == "sync",
+        ),
+    )
+
     return TbSpec(
         clock="clk",
         reset="rst",
         reset_cycles=2,
         vectors=vectors,
         checks=checks,
+        assertion_spec=assertion_spec,
     )
 
 

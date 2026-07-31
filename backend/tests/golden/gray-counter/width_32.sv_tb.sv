@@ -66,4 +66,10 @@ module gray_counter_tb;
         $finish;
     end
 
+    // Concurrent assertions (SVA)
+    gray_reset_value: assert property (@(posedge clk) $rose(rst_n) |-> gray == 32'd0)
+        else $fatal(1, "SVA FAIL: gray_reset_value");
+    gray_stable_when_disabled: assert property (@(posedge clk) disable iff (!rst_n) !en |=> $stable(gray))
+        else $fatal(1, "SVA FAIL: gray_stable_when_disabled");
+
 endmodule

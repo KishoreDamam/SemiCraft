@@ -299,12 +299,18 @@ def generate_tb(module_def, opts, rtl_module: Module) -> str:
     stmts.append(Finish())
 
     # Optional concurrent SVA: emitted only when the module attaches an
-    # assertion recipe to its TbSpec. No current module does, so this is inert
-    # (asserts stays empty and the TB renders exactly as before, aside from the
-    # watchdog). The recipe's signal names are taken verbatim — property text is
-    # opaque (TB_SPEC §5), so naming-style transforms are not reapplied inside
-    # it; a module attaching one is responsible for spelling the names to match
-    # its rendered RTL.
+    # assertion recipe to its TbSpec.
+    #
+    # The recipe is written by the module in *canonical* names — `tb_spec(opts)`
+    # never sees the render style — so it is restyled through the same name map
+    # as every other net before properties are generated. Without that step an
+    # active-low reset (the default) would emit `disable iff (!rst)` against a
+    # net actually rendered `rst_n`, i.e. broken at the default configuration,
+    # not just under a custom naming convention.
+    #
+    # Only structured signal fields are renamed. Property text stays opaque
+    # (TB_SPEC §5), and so do the `when` antecedents on OneHot/NoUnknown — see
+    # assertions/restyle.py for why, and for what that costs a spec author.
     asserts: tuple[AssertProperty, ...] = ()
     if spec.assertion_spec is not None:
         # Lazy import: the assertions package pulls in the TB node family, so a
@@ -312,8 +318,9 @@ def generate_tb(module_def, opts, rtl_module: Module) -> str:
         # (contract -> assertions -> tb -> generate_tb). Importing at call time
         # keeps the package-load graph acyclic.
         from ..assertions.generate import generate_assertions
+        from ..assertions.restyle import restyle_spec
 
-        asserts = generate_assertions(spec.assertion_spec)
+        asserts = generate_assertions(restyle_spec(spec.assertion_spec, styled))
 
     tb = TbModule(
         name=f"{rtl_module.name}_tb",

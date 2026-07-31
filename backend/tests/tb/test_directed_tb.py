@@ -149,14 +149,43 @@ def test_port_constraint_bounds_driven_value() -> None:
 # --------------------------------------------------------------------------- #
 
 
+# Modules that now attach a real ``TbSpec.assertion_spec`` (P3-05a wiring).
+# Every other catalog module still leaves the hook unused, so this set is the
+# boundary between "emits SVA" and "does not" — extend it as modules are wired.
+_MODULES_WITH_ASSERTIONS = {"gray-counter"}
+
+
 @pytest.mark.parametrize("item_id", MODULE_IDS)
-def test_assertion_hook_inert_for_current_modules(item_id: str) -> None:
-    """No current module declares an assertion_spec, so no SVA block is emitted
-    and the run gate / goldens are unaffected by the hook."""
+def test_assertion_hook_emits_sva_only_for_wired_modules(item_id: str) -> None:
+    """The SVA block appears exactly for modules that declare an assertion_spec.
+
+    Was ``test_assertion_hook_inert_for_current_modules`` while no module used
+    the hook. It is not enough to relax that to "some modules may emit SVA" —
+    the useful invariant is the *exact* correspondence, so an accidental spec
+    (or an accidentally dropped one) still fails a test.
+    """
     assert pwm.tb_spec  # sanity
     tb = _tb(item_id)
-    assert "assert property" not in tb
-    assert "Concurrent assertions (SVA)" not in tb
+    if item_id in _MODULES_WITH_ASSERTIONS:
+        assert "// Concurrent assertions (SVA)" in tb
+        assert "assert property" in tb
+    else:
+        assert "assert property" not in tb
+        assert "Concurrent assertions (SVA)" not in tb
+
+
+@pytest.mark.parametrize("item_id", sorted(_MODULES_WITH_ASSERTIONS))
+def test_wired_module_assertions_use_rendered_reset_name(item_id: str) -> None:
+    """Guard expressions must name the *rendered* reset net, not the canonical one.
+
+    A module writes canonical names (``rst``); ``build_name_map`` renders an
+    active-low reset as ``rst_n``. Without the restyle step in ``generate_tb``
+    the emitted guard would reference a net that does not exist — and since
+    active-low is the default, that would be broken out of the box.
+    """
+    tb = _tb(item_id)  # default options => active-low reset
+    assert "disable iff (!rst_n)" in tb
+    assert "disable iff (!rst)" not in tb
 
 
 def test_assertion_spec_wires_into_tb() -> None:
