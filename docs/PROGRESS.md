@@ -68,9 +68,10 @@ Updated: 2026-07-29. Keep current — this file is the session-handoff state.
 | P3-03 sim sandbox service | DONE, committed b25e693, pushed | POST /api/v2/simulate over run_smoke; status pass/fail/unavailable/no_tb/error; degrades to "unavailable" HTTP 200 (no Verilator locally); frontend Run button + SimPanel log viewer. 15 backend + 9 frontend tests; v2 additive |
 | P3-04 directed-TB generator | DONE, committed dae8057, pushed | per-port width/PortConstraint clamping (no-op → drives byte-identical); TimeoutGuard watchdog forked atop stimulus initial (budget (reset_cycles+n_cycles+16)*8, never fires on pass); expected values still only from TbSpec.checks; ResetSeq NOT adopted; inert assertion_spec hook (no SVA for current modules). All 165 TB goldens regenerated (watchdog-only diff, 0 RTL/doc change). 2456 tests green |
 | CI run-gate watch | DONE — CI GREEN on 482cd71 | first push (592000c) RED: all 165 TBs hit %Error-LIFETIME — watchdog `repeat` counter is automatic, may outlive join_none process under verilator --timing. Fixed (482cd71) with explicit `static int watchdog_i` for-loop (Verilator's own suggested fix); same posedge-count semantics. lint + tb-compile + tb-run all green |
-| P3-06 checker scaffolds | DONE, committed 960894f | standalone semicraft_core/checkers: monitor (passive sampler) / checker (procedural reset+stability+latency checks) / scoreboard (SV class, expected queue, report()). Directed, not UVM. NOT wired into generate_files — no golden changes. docs/CHECKERS.md. Emitted SV is NOT compile-verified (see next section: verilator IS available in Linux containers, so a compile gate for these is now cheap — do it when wiring lands) |
+| P3-06 checker scaffolds | DONE, committed 960894f | standalone semicraft_core/checkers: monitor (passive sampler) / checker (procedural reset+stability+latency checks) / scoreboard (SV class, expected queue, report()). Directed, not UVM. NOT wired into generate_files — no golden changes. docs/CHECKERS.md. Emitted SV is now COMPILE-VERIFIED (P3-06a): `tests/checkers/test_compile.py` runs all three families through `verilator --timing --lint-only` (11 tests, incl. a negative control so the gate can't rot into a no-op), wired into CI's lint-gate job. It caught a real defect on first run — the scoreboard-wrapper example in BOTH the golden fixture and docs/CHECKERS.md referenced `data` from push_expr/compare_expr without declaring it in `ScoreboardWrapper.ports`, emitting a module with an undeclared signal. Generator was correct; the examples were not. Both fixed |
 | P3-07 test-plan doc gen | DONE, committed 596d81c | semicraft_core/testplan.py -> `<module>_testplan.md` as a SECOND doc-kind file appended after the datasheet (datasheet stays files[]'s first doc entry, so `next(f for f in files if f.kind=="doc")` still resolves to it). 165 testplan goldens; all pre-existing rtl/doc/tb goldens byte-identical. Gap list (undriven inputs / unchecked outputs) reports "None found" on all current modules — verified genuinely true, and the logic has synthetic tests proving it fires both ways. docs/TESTPLAN.md |
-| Next | **P3-09 first — it now has a concrete bug list (see "Full TB run matrix" below), not just a release checklist.** Then P3-08 cocotb beta (dep P3-03) | 2-agent budget per session |
+| P3-06a checker compile gate | DONE | see P3-06 row: closes the "never compiled" gap that WP shipped with |
+| Next | **P3-08 cocotb beta** (dep P3-03), then P3-09 release v0.3.0. Also outstanding: wire P3-05 assertions + P3-06 checkers into `generate_files` (both still standalone), and decide the full-matrix CI question below | 2-agent budget per session |
 
 ## Full TB run matrix — 17 pre-existing failures (found + fixed 2026-07-29)
 
@@ -138,8 +139,11 @@ an expectation fitted to a buggy sim silently freezes the bug, and here it also
 misdirected the follow-up diagnosis. `clock_divider.py`'s comment now says the
 checks are derived, not observed.
 
-**CI gap that hid all of this:** `test_tb_run.py` defaults to the `defaults`
-case per module; `SEMICRAFT_TB_RUN_ALL=1` runs the full 165-case matrix
-(~20 min). Making the full matrix a nightly/manually-dispatchable CI job is the
-open recommendation — a per-push job would add ~20 min to every push, which is a
-cost decision for the user, not a silent change.
+**CI gap that hid all of this — now closed.** `test_tb_run.py` defaults to the
+`defaults` case per module; `SEMICRAFT_TB_RUN_ALL=1` runs the full 165-case
+matrix (~20 min). Per user decision (2026-07-29), the full matrix now runs as
+its own workflow — `.github/workflows/tb-matrix.yml`, nightly at 03:17 UTC plus
+`workflow_dispatch` — rather than on every push, so regressions surface within a
+day without adding ~20 min to the normal loop. It lives in a separate workflow
+file on purpose: adding a `schedule:` trigger to `ci.yml` would have run *every*
+job in it nightly.

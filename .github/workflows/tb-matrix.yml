@@ -1,0 +1,46 @@
+# Full golden TB run matrix (nightly + on demand).
+#
+# The per-push CI job (ci.yml, "golden TB run gate") runs each module's
+# `defaults` case only — one compile+run per module. That is deliberately fast,
+# but it is also exactly what let 17 real failures sit undetected: every one of
+# them was in a *non-default* option variant. See docs/PROGRESS.md, "Full TB run
+# matrix".
+#
+# This workflow runs the full 165-case matrix (SEMICRAFT_TB_RUN_ALL=1, ~20 min)
+# on a nightly schedule and on demand, so regressions surface within a day
+# without adding ~20 minutes to every push.
+name: TB run matrix (full)
+
+on:
+  schedule:
+    # 03:17 UTC daily. Off-peak, and deliberately not on the hour — GitHub
+    # drops scheduled runs at popular times under load.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+jobs:
+  tb-matrix:
+    name: full golden TB run matrix (verilator)
+    runs-on: ubuntu-latest
+    # Generous ceiling: the matrix takes ~17-20 min locally, but a cold runner
+    # compiling 165 testbenches can be slower. This bounds a hang, not the
+    # expected runtime.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Install Verilator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y verilator
+      - name: Install dependencies
+        run: uv sync --group dev
+      - name: Run full TB run matrix
+        env:
+          SEMICRAFT_TB_RUN_ALL: "1"
+        # -x is deliberately NOT used: a nightly gate should report every
+        # failing case in one run, not just the first.
+        run: uv run pytest backend/tests/golden/test_tb_run.py -v

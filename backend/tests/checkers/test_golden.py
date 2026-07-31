@@ -60,6 +60,11 @@ _SCOREBOARD_SPEC = ScoreboardSpec(
         push_expr="data",
         compare_signal="ack",
         compare_expr="data",
+        # Required: `data` is referenced by push_expr/compare_expr but is not
+        # one of the three implicit ports, so without it the emitted wrapper
+        # references an undeclared signal and does not compile (caught by
+        # test_compile.py).
+        ports=[Signal("data", 8)],
     ),
 )
 
@@ -186,7 +191,8 @@ endclass
 module req_ack_scoreboard_wrap (
     input logic clk,
     input logic req,
-    input logic ack
+    input logic ack,
+    input logic [7:0] data
 );
 
     req_ack_scoreboard sb;

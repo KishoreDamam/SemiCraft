@@ -72,6 +72,12 @@ jobs:
           fi
       - name: Run golden TB compile gate (P2-14)
         run: uv run pytest backend/tests/golden/test_tb_compile.py -v
+      - name: Run checker/monitor/scoreboard compile gate (P3-06)
+        # The P3-06 scaffolds ship as generated SystemVerilog but were only
+        # text-asserted when they landed; nothing compiled them. These tests
+        # skip when verilator is absent, so they are a no-op in the plain
+        # pytest job and only do real work here.
+        run: uv run pytest backend/tests/checkers/test_compile.py -v
       - name: Run golden TB run gate (P3-03a, enforcing)
         # Executes each module's defaults smoke TB (SEMICRAFT_TB_RUN_ALL=1
         # for the full matrix). Went enforcing after the first advisory run

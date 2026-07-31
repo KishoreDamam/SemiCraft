@@ -298,6 +298,11 @@ sb = ScoreboardSpec(
         module_name="req_ack_scoreboard_wrap", clock="clk",
         push_signal="req", push_expr="data",
         compare_signal="ack", compare_expr="data",
+        # `data` is referenced by push_expr/compare_expr but is not one of the
+        # three implicit ports (clock/push_signal/compare_signal), so it must be
+        # declared here or the emitted module will not compile. The opaque-text
+        # fields are never parsed, so the generator cannot infer it.
+        ports=[Signal("data", 8)],
     ),
 )
 print(generate_scoreboard(sb))
@@ -346,7 +351,8 @@ endclass
 module req_ack_scoreboard_wrap (
     input logic clk,
     input logic req,
-    input logic ack
+    input logic ack,
+    input logic [7:0] data
 );
 
     req_ack_scoreboard sb;
@@ -404,19 +410,30 @@ These three exact texts are asserted byte-for-byte by
   meaningfully. A caller wanting to scoreboard structured transactions should
   give the class a numeric summary field to compare, or accept the cosmetic
   formatting gap.
-- **`ScoreboardWrapper` uses `final begin ... end` to call `report()`.** This
-  is a standard SystemVerilog construct Verilator has supported for several
-  releases, but see below — it has not been exercised by an actual
-  Verilator run in this environment.
-- **Not compile-verified locally.** Verilator is not available on this
-  development host (see `CLAUDE.md`), so none of the SV this generator
-  produces — including the worked examples above — has been run through
-  `verilator --timing --binary` or any other SV compiler. The output has
-  been hand-reviewed for syntactic correctness and cross-checked against the
-  idioms `tb/render_tb.py` and `semicraft_core/assertions/generate.py`
-  already use, but "not compile-verified locally" should be read literally:
-  compile-checking this family end-to-end is deferred to the P3-09 CI gate
-  (or an earlier WP that wires a sandboxed Verilator run).
+- **`ScoreboardWrapper` uses `final begin ... end` to call `report()`.** A
+  standard SystemVerilog construct, now exercised by the compile gate below.
+- **Compile-verified (superseding this WP's original "not compile-verified"
+  note).** `backend/tests/checkers/test_compile.py` runs every family through
+  `verilator --timing --lint-only`: monitor with and without a qualifier,
+  checker with each check family and both reset polarities, and scoreboard
+  class-only, with a wrapper, and with non-trivial `push_expr`/`compare_expr`.
+  Verilator **is** available in Linux containers and in CI's lint-gate job, so
+  the gate runs there; it skips (never fails) where the binary is absent, such
+  as the Windows dev host.
+
+  `--lint-only`, not `--binary`: these scaffolds are standalone components, not
+  elaborable top-level designs with a stimulus process, so there is nothing to
+  execute. Lint-only still does full parse and elaboration checking, which is
+  the question this gate asks. Running them for real means instantiating them
+  against a DUT, which arrives with the wiring WP.
+
+  This gate found a genuine defect on its first run: the scoreboard-wrapper
+  example — in both the golden fixture and the worked example above — used
+  `push_expr="data"` without declaring `data` in `ScoreboardWrapper.ports`, so
+  the emitted module referenced an undeclared signal. The generator was
+  correct; the examples were not. Both are fixed, and a negative-control test
+  asserts that the omission still fails to compile, so the gate cannot rot into
+  a no-op.
 - **Not wired into `generate_files`.** Like P3-05, this package is standalone
   by design for this WP: no `ModuleDef`/`TbSpec` carries a
   `MonitorSpec`/`CheckerSpec`/`ScoreboardSpec` yet, and `generate_files` does
