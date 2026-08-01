@@ -73,7 +73,8 @@ Updated: 2026-07-29. Keep current — this file is the session-handoff state.
 | P3-06a checker compile gate | DONE, committed b38ca85 | see P3-06 row: closes the "never compiled" gap that WP shipped with |
 | P3-05a assertion restyle + first module | DONE, committed d9fc40c | `assertions/restyle.py`: module specs are written in CANONICAL names (`tb_spec(opts)` never sees the render style) and `generate_tb` now restyles them through the same name map as every other net. Without it an active-low reset — the DEFAULT — emitted `disable iff (!rst)` against a net rendered `rst_n`, i.e. the feature was broken out of the box. `when` antecedents stay opaque (renaming inside free text needs an SV parser); documented + asserted as a limitation |
 | P3-05b remaining five modules | DONE, committed c6a8fff | clock-divider, debouncer, edge-detector, lfsr, rr-arbiter wired; every property derived from the RTL reset body and verified to HOLD in sim. rr-arbiter carries onehot0 on `grant` (its defining invariant). Deliberate exclusions, each pinned by a test: edge-detector `registered_output=False` (pulse is a continuous assign) and pwm entirely (only cnt is reset; pwm_out is combinational). Full matrix caught a width bug in this work: `pulse` is opts.width bits, not 1 — passed at default width, broke on wide configs |
-| Next | **Wire P3-06 checkers into `generate_files`** — the remaining half of the wiring decision (assertions are done, P3-05a/b). Recommendation on `GeneratedFile.kind`: emit checker scaffolds as `kind="tb"` with a distinguishing path (`<module>_checker.sv`), NOT a widened Literal. Widening is a frozen-contract change (plan Appendix A.1) *and* breaks the frontend — `KIND_DOT` in `FileTabs.tsx` is a `Record<FileKind, string>`, so a new kind fails the TS build until the type and map are updated. The datasheet/testplan split already set the precedent of two files sharing a kind, distinguished by path. Then **P3-08 cocotb beta**, then P3-09 release v0.3.0 | 2-agent budget per session |
+| P3-06 wiring analysis | BLOCKED ON A DESIGN FINDING — see "Checker wiring" section below. Short version: for the *current* catalog the checker families duplicate the SVA wired in P3-05b, and the one non-duplicate family is fragile on its only candidate module. Recommend deferring to Phase 4 IPs | evidence recorded below |
+| Next (superseded) | **Wire P3-06 checkers into `generate_files`** — the remaining half of the wiring decision (assertions are done, P3-05a/b). Recommendation on `GeneratedFile.kind`: emit checker scaffolds as `kind="tb"` with a distinguishing path (`<module>_checker.sv`), NOT a widened Literal. Widening is a frozen-contract change (plan Appendix A.1) *and* breaks the frontend — `KIND_DOT` in `FileTabs.tsx` is a `Record<FileKind, string>`, so a new kind fails the TS build until the type and map are updated. The datasheet/testplan split already set the precedent of two files sharing a kind, distinguished by path. Then **P3-08 cocotb beta**, then P3-09 release v0.3.0 | 2-agent budget per session |
 
 ## Full TB run matrix — 17 pre-existing failures (found + fixed 2026-07-29)
 
@@ -149,3 +150,52 @@ its own workflow — `.github/workflows/tb-matrix.yml`, nightly at 03:17 UTC plu
 day without adding ~20 min to the normal loop. It lives in a separate workflow
 file on purpose: adding a `schedule:` trigger to `ci.yml` would have run *every*
 job in it nightly.
+
+## Checker wiring — deferred, with evidence (2026-07-29)
+
+The plan says to wire P3-06's checker/monitor/scoreboard scaffolds into
+`generate_files` alongside the assertions. Assertions landed (P3-05a/b). For
+checkers, inspecting what they would actually add to the **current** catalog
+argues for deferring rather than wiring:
+
+**1. Two of the three check families duplicate the SVA just wired.** Their own
+docstrings say so. `ResetValueCheck` is "distinct from
+`assertions.spec.ResetKnownValue`" only in being *procedural* rather than
+concurrent; `StabilityCheck` is the "procedural analogue" of `Stability` and its
+docstring calls its reset guard "a weaker approximation than SVA". Attaching
+them to the 7 current modules would emit a second, weaker copy of checks that
+already run — including duplicate failure messages for a single real defect.
+
+**2. The one non-duplicate family is fragile on its only candidate.**
+`LatencyCheck` has no SVA counterpart, but no current module has a valid/ready
+handshake. The nearest fit is rr-arbiter (`req` -> `grant_valid`), and the
+emitted state machine arms on `request` and evaluates `response` on the
+*following* edge. That works for `grant_style="registered"`, but for
+`"combinational"` the grant is asserted in the *same* cycle as `req` and is gone
+by the time the checker looks — a spurious failure. Making it correct would mean
+a per-grant_style max_cycles and a same-cycle-response mode in the generator.
+
+**3. Monitors and scoreboards need a transaction to be interesting.** A monitor
+over a 1-bit `d`/`pulse` pair prints a line per cycle; a scoreboard needs
+expected-vs-actual *transactions*, which these dataflow modules do not have.
+
+**Where they do pay off: Phase 4 IPs.** FIFO, UART, SPI, I2C and the AXI-Lite
+register block have real valid/ready handshakes (LatencyCheck, and the
+`Handshake` SVA family), real transactions (monitor + scoreboard), and
+request/response latencies worth bounding. P4-09 ("per-IP verification scaffold")
+is the natural home, and by then P3-06's generators are compile-gated and ready.
+
+**What is already done and not blocked by this:** the scaffolds generate, are
+compile-verified in CI (P3-06a), and are documented. The gap is only that no
+module *attaches* one — deliberately, per the above.
+
+**If wiring is wanted anyway**, the mechanism is roughly: a `checker_spec` field
+on `TbSpec` mirroring `assertion_spec`; a `restyle` for `CheckerSpec` (module
+specs are canonical, same reason as assertions — P3-05a); emission as
+`kind="tb"` at `<module>_checker.sv` (NOT a widened `GeneratedFile.kind` — that
+is a frozen-contract change *and* breaks the frontend, whose `KIND_DOT` is an
+exhaustive `Record<FileKind, string>`); an additive `checkers` field on
+`TbModule` so the TB instantiates it (an un-instantiated checker file compiles
+but verifies nothing — the exact "artifact that exists but does not run" pattern
+this session kept finding); and both golden gates extended to pass the checker
+file as an extra Verilator source.
