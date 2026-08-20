@@ -95,6 +95,19 @@ class GoldenCase:
         )
 
     @property
+    def cocotb_snapshot_path(self) -> Path:
+        """Golden path for the module cocotb testbench (P3-08, beta).
+
+        Language-qualified for the same config_hash reason as the other
+        per-case snapshots: the hash is stamped into the file's banner.
+        """
+        return (
+            GOLDEN_ROOT
+            / self.snippet_id
+            / f"{self.case_name}.{_extension(self.language)}_cocotb.py"
+        )
+
+    @property
     def resolved_options(self) -> dict:
         """Options dict with ``language`` pinned to this case's resolved language."""
         return {**self.options, "language": self.language}

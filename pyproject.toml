@@ -14,6 +14,7 @@ dev = [
     "pytest",
     "ruff",
     "httpx",
+    "cocotb==1.9.2",
 ]
 
 [build-system]

@@ -108,8 +108,13 @@ where a reader will hit it.
   configuration. A property that merely usually holds is worse than none.
 - **edge-detector's `registered_output=False` cases carry no assertions**, for
   the same reason: `pulse` is a continuous assign with no reset value.
-- **cocotb backend (P3-08) not started.** Deferred past this release; the
-  Verilator path is the only TB backend in v0.3.0.
+- **cocotb backend (P3-08) is beta.** Landed after the first cut of this
+  section: every module now also emits `test_<module>.py`, and all 7 run green
+  under Verilator (`backend/tests/tb/test_cocotb_run.py`). It is beta because
+  the SV backend remains the default, carries the exhaustive option matrix, and
+  is the only one wired into `POST /api/v2/simulate`; the cocotb path also
+  emits no SVA, since assertions are a SystemVerilog construct. Pinned to cocotb
+  1.9.2 — cocotb 2.x cannot build against Verilator 5.020. See `docs/COCOTB.md`.
 - **Phase 3's planned module family** in the plan text named
   "counter+register+fifo-lite". No fifo-lite module exists (FIFO is a Phase 4
   IP). The exit criterion is met against the seven Phase-2 modules instead,

@@ -49,12 +49,21 @@ __all__ = [
     "GenerateFilesResult",
     "generate_files",
     "EMIT_TB",
+    "EMIT_COCOTB_TB",
 ]
 
 # Smoke-TB emission is feature-flagged OFF until P2-13 lands the TB generator
 # that consumes ``ModuleDef.tb_spec``. When P2-13 arrives it flips this to True
 # and adds the ``tb`` file to ``generate_files`` (see the guard there).
 EMIT_TB = True
+
+# cocotb testbench emission (P3-08, beta). Enabled: the backend is exercised by
+# a real run gate (backend/tests/tb/test_cocotb_run.py executes the generated
+# Python against the generated RTL under Verilator), so shipping it dormant
+# would hide working code rather than protect users. "Beta" here means the SV
+# testbench remains the supported default and the one every golden gate runs;
+# the emitted Python says so in its own banner. Set False to omit the file.
+EMIT_COCOTB_TB = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -326,6 +335,26 @@ def generate_files(item_id: str, options: dict) -> GenerateFilesResult:
                 files.append(
                     GeneratedFile(path=f"{rtl_module.name}_tb.sv", kind="tb", text=tb_text)
                 )
+
+            # cocotb alternative backend (P3-08, beta). Same TbSpec recipe as
+            # the SV TB, emitted as Python. `kind="tb"` rather than a widened
+            # GeneratedFile.kind Literal: the Literal is a frozen contract
+            # (plan Appendix A.1) and the frontend's KIND_DOT is an exhaustive
+            # Record<FileKind, string>, so a new kind would break its build.
+            # The path distinguishes it, exactly as the datasheet/test-plan
+            # split does for two `doc` files.
+            if EMIT_COCOTB_TB:
+                from .tb.cocotb_tb import cocotb_tb_filename, generate_cocotb_tb
+
+                cocotb_text = generate_cocotb_tb(item, opts, rtl_module)
+                if cocotb_text:
+                    files.append(
+                        GeneratedFile(
+                            path=cocotb_tb_filename(rtl_module.name),
+                            kind="tb",
+                            text=cocotb_text,
+                        )
+                    )
 
         # Test-plan document (P3-07): a second `doc`-kind file appended after
         # the datasheet, derived entirely from ExplanationDoc/port_groups/

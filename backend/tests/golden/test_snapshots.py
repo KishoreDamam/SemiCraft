@@ -151,6 +151,49 @@ def test_snapshot_testplan(case: GoldenCase, request: pytest.FixtureRequest) -> 
 @pytest.mark.parametrize(
     "case", _MODULE_CASES, ids=[golden_case_id(c) for c in _MODULE_CASES]
 )
+def test_snapshot_cocotb(case: GoldenCase, request: pytest.FixtureRequest) -> None:
+    """Snapshot the cocotb testbench (P3-08) — the second ``tb``-kind file.
+
+    Located by suffix, not by "the tb file": that lookup resolves to the
+    SystemVerilog testbench, which stays the default backend and the one the
+    compile/run gates exercise.
+    """
+    result = generate_files(case.snippet_id, case.resolved_options)
+    cocotb_file = next((f for f in result.files if f.path.endswith(".py")), None)
+    if cocotb_file is None:
+        pytest.skip(
+            f"no cocotb tb for {case.snippet_id}/{case.case_name} — either the "
+            "module has no clock, or semicraft_core.generate.EMIT_COCOTB_TB is "
+            "False. Not a regression."
+        )
+    assert cocotb_file.kind == "tb"
+
+    update = request.config.getoption("--update-golden")
+    path = case.cocotb_snapshot_path
+
+    if update:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(cocotb_file.text.encode("utf-8"))
+        return
+
+    if not path.is_file():
+        pytest.skip(
+            f"no committed cocotb golden at {path} yet. Run --update-golden "
+            "locally, review the diff, and commit to turn this into a gate."
+        )
+
+    expected = path.read_bytes()
+    actual = cocotb_file.text.encode("utf-8")
+    assert actual == expected, (
+        f"generated cocotb tb for {case.snippet_id}/{case.case_name} "
+        f"[{case.language}] no longer matches {path}. If intentional, "
+        "regenerate with --update-golden and review the diff."
+    )
+
+
+@pytest.mark.parametrize(
+    "case", _MODULE_CASES, ids=[golden_case_id(c) for c in _MODULE_CASES]
+)
 def test_snapshot_tb(case: GoldenCase, request: pytest.FixtureRequest) -> None:
     result = generate_files(case.snippet_id, case.resolved_options)
     tb_file = next((f for f in result.files if f.kind == "tb"), None)
