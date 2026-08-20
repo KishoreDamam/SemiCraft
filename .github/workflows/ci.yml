@@ -84,6 +84,14 @@ jobs:
         # skip when verilator is absent, so they are a no-op in the plain
         # pytest job and only do real work here.
         run: uv run pytest backend/tests/checkers/test_compile.py -v
+      - name: Run reference IP TB run gate (P4-01)
+        # The P4-01 IP contract is proven by a reference IP that goes through
+        # the whole pipeline; this compiles and runs its generated testbench
+        # over six configurations, including a prefix+camelCase naming style.
+        # That naming case is the one no golden covers, and it is what found
+        # the render_tb hardcoded-clock bug (TB_SPEC §7a).
+        run: uv run pytest backend/tests/ips/test_run.py -v
+
       - name: Run golden TB run gate (P3-03a, enforcing)
         # Executes each module's defaults smoke TB (SEMICRAFT_TB_RUN_ALL=1
         # for the full matrix). Went enforcing after the first advisory run

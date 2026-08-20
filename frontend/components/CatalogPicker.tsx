@@ -5,12 +5,17 @@ import type { CatalogItem, ItemKind } from "@/lib/types";
 const GROUPS: { kind: ItemKind; label: string }[] = [
   { kind: "snippet", label: "Snippets" },
   { kind: "module", label: "Modules" },
+  { kind: "ip", label: "IP Blocks" },
 ];
 
 /**
- * Left-panel catalog picker (P2-05b). Groups items into Snippets / Modules
- * sections and shows a "beta" badge for non-stable maturity. Each item keeps
- * role="option" so it behaves like a single-select listbox.
+ * Left-panel catalog picker (P2-05b). Groups items into Snippets / Modules /
+ * IP Blocks sections and shows a "beta" badge for non-stable maturity. Each
+ * item keeps role="option" so it behaves like a single-select listbox.
+ *
+ * An empty group renders nothing, so listing a kind before any item of that
+ * kind exists is free — and is what keeps a new backend kind from being
+ * silently dropped here (the IP Blocks group is empty until P4-02).
  */
 export function CatalogPicker({
   items,

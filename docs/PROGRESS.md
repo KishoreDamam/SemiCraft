@@ -1,6 +1,6 @@
 # SemiCraft Progress Tracker
 
-Updated: 2026-07-29. Keep current — this file is the session-handoff state.
+Updated: 2026-08-20. Keep current — this file is the session-handoff state.
 
 ## WP status
 
@@ -76,7 +76,7 @@ Updated: 2026-07-29. Keep current — this file is the session-handoff state.
 | P3-09 release v0.3.0 | DONE (prep) — NOT TAGGED, see below | VERSION 0.1.0 -> 0.3.0 and pyproject 0.1.0 -> 0.3.0. **v0.2.0 shipped with VERSION=0.1.0**: every artifact it generated stamped `// SemiCraft v0.1.0`. Nothing caught it because VERSION is not part of config_hash, so no golden or hash moved. Guarded now by `backend/tests/release/test_version_consistency.py`, which ties VERSION + pyproject to the newest `# SemiCraft vX.Y.Z` heading in RELEASE_CHECKLIST.md (a file, so it works in a shallow clone / before the tag exists). All 876 goldens regenerated: banner-only diff, 149 config hashes byte-identical. RELEASE_CHECKLIST.md gains a v0.3.0 section incl. an explicit "Deliberate gaps" list |
 | P3-06 wiring analysis | BLOCKED ON A DESIGN FINDING — see "Checker wiring" section below. Short version: for the *current* catalog the checker families duplicate the SVA wired in P3-05b, and the one non-duplicate family is fragile on its only candidate module. Recommend deferring to Phase 4 IPs | evidence recorded below |
 | P3-08 cocotb beta | DONE | `tb/cocotb_tb.py` emits `test_<module>.py` as a SECOND tb-kind file (path-distinguished, NOT a widened GeneratedFile.kind — frozen contract + frontend `Record<FileKind,string>` build break). Same TbSpec, same name map, same reset settle (TB_SPEC §6a) as the SV backend; a test asserts both backends emit identical expected values. **Pinned cocotb==1.9.2**: cocotb 2.0.1's Verilator VPI shim calls `VerilatedVpi::doInertialPuts()`/`evalNeeded()`, absent from Verilator 5.020 (newest in apt) — verified by spike, it fails in make. All 7 modules RUN green (~70s); 165 goldens; docs/COCOTB.md | 45 unit + 7 run tests |
-| Next | **Phase 4** (P4-01 IpDef contract) — where the P3-06 checkers finally pay off. Also open: wire the cocotb path into `POST /api/v2/simulate` (SV-only today); add a frontend CI job (none exists — which is how a broken `npm ci` lockfile survived); **v0.3.0 prepared but NOT tagged** (tag belongs on main after merge; CI does not run on this branch) | 2-agent budget per session |
+| Next | Phase 3 COMPLETE. Work moved to **Phase 4** — see its section below | 2-agent budget per session |
 
 ## Full TB run matrix — 17 pre-existing failures (found + fixed 2026-07-29)
 
@@ -201,3 +201,71 @@ exhaustive `Record<FileKind, string>`); an additive `checkers` field on
 but verifies nothing — the exact "artifact that exists but does not run" pattern
 this session kept finding); and both golden gates extended to pass the checker
 file as an extra Verilator source.
+
+## Phase 4 (started 2026-08-20)
+
+| WP | Status | Notes |
+|---|---|---|
+| P4-01 IpDef contract | DONE | `semicraft_core/ips/`: `IpDef` (a strict superset of `ModuleDef` — an IP is a module plus `register_map(opts)` and `bundles(opts)`), the register-map model (`RegisterField`/`Register`/`RegisterMap`, rules R1–R6), bus-side `PortBundle`s over **flat** ports (no SV `interface` — locked decision), the two datasheet sections, and `check_bundles_against_module` (rules B1–B4) run during generation. Registry discovers a third catalog package; `by_kind("ip")` is empty until P4-02. Contract frozen in plan **Appendix B**; author guide `docs/IPS.md`. 91 tests in `backend/tests/ips/` (6 of them Verilator runs) |
+| Next | **P4-02** — register-map-driven AXI4-Lite register block, the keystone IP P4-05..08 reuse. Also open: wire the cocotb path into `POST /api/v2/simulate` (SV-only today); add a frontend CI job (none exists — which is how a broken `npm ci` lockfile survived; note `npx tsc --noEmit` reports 10 pre-existing errors in *test* files, which `next build` does not typecheck); **v0.3.0 prepared but NOT tagged** (tag belongs on main after merge; CI does not run on this branch) | 2-agent budget per session |
+
+### P4-01: the contract is proven by a real IP, not by its own docstrings
+
+A contract with no implementor is the same "documented, never executed" shape
+this project keeps finding defects in. So P4-01 ships a **test-only reference
+IP** (`backend/tests/ips/reference_ip.py`) — a two-register CSR block on a
+native bus — that goes through the entire pipeline: IR, both language
+renderers, the datasheet, the smoke TB, SVA, and a **Verilator compile+run
+gate over six configurations** (`backend/tests/ips/test_run.py`).
+
+It is deliberately *not* a catalog item: P4-02's AXI4-Lite register block is
+the first real IP, and shipping a throwaway CSR block first would mean golden
+files and a datasheet for something P4-02 immediately supersedes. Tests
+register it through the real registry, so it exercises no private back door.
+
+### Bug found by that run gate: every generated testbench was uncompilable under any non-default naming style
+
+`render_tb` held the clock net in a module-level `_CLOCK_NAME = "clk"`. That is
+right for every *default* configuration — the default style renders the clock
+port `clk` — but under any style with a prefix, suffix, or camelCase the DUT
+clock renders (say) `p_clk` while every `@(posedge clk)` in the stimulus and
+the watchdog still said `clk`. Verilator: `Can't find definition of variable:
+'clk'`. All 7 modules, both languages, shipped in v0.2.0 and v0.3.0.
+
+Why the 165-case golden matrix missed it: **no golden case sets a naming
+style**, so the whole matrix exercises only the one spelling the constant
+happened to match. The blind spot is naming, and it is the same shape as the
+P3-05a assertion-restyle bug — metadata written in canonical names, rendered
+without going through `build_name_map`.
+
+Fixed by threading `TbModule.clock.signal` through the emitters (TB_SPEC §7a,
+normative). Byte-identical at the default style, so **no golden file changed**
+— which is exactly why nothing failed for two releases. Regression cover in
+`tests/tb/test_directed_tb.py`: for every module under a prefix+camelCase
+style, the set of nets the TB waits on must be exactly the styled clock, and
+every such net must be declared.
+
+### Still open from the same blind spot (NOT fixed here)
+
+`generate._md_port_table` renders `PortGroup.ports` and `ExplanationDoc`
+signal names **raw**, so under a naming style the datasheet documents ports the
+RTL does not declare. Reproduced:
+
+```
+generate_files("gray-counter", {"naming": {"convention": "snake", "prefix": "p_"}})
+  RTL:  input logic p_clk, p_rst_n, p_en; output logic [WIDTH-1:0] p_gray
+  DOC:  | `clk` | | `rst_n` | | `en` | | `gray` |
+```
+
+Not fixed in P4-01 because the honest fix is not a display-time restyle: the 7
+modules *hand-render* the `_n` suffix in `port_groups`/`explain` (e.g.
+`gray_counter._reset_port_name`), so the name map — keyed on canonical `rst` —
+does not match `rst_n`, and a prefix style would still emit `rst_n` rather than
+`p_rst_n`. The fix is to make modules return canonical names and let
+`generate_files` restyle, which touches all 7 modules and their tests. It is a
+no-op at the default style (so no golden churn), and it is the same one-line
+lesson as above. Worth its own WP.
+
+P4-01's own new code does restyle correctly — `ips/bundles.restyle_bundles`,
+covered by a test that asserts the rendered bundle names match the RTL under a
+prefix+camelCase style.

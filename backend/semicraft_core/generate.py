@@ -267,9 +267,21 @@ def _md_port_table(port_groups: list[PortGroup], explanation) -> list[str]:
     return lines
 
 
-def _module_doc(item, opts, explanation, config_hash_value: str) -> str:
+def _module_doc(
+    item,
+    opts,
+    explanation,
+    config_hash_value: str,
+    interface_sections: list[str] | None = None,
+) -> str:
     """Markdown datasheet for a module (Appendix A.3): title, purpose, port
-    table (grouped from ``port_groups``), configuration, assumptions/limitations."""
+    table (grouped from ``port_groups``), configuration, assumptions/limitations.
+
+    ``interface_sections`` are extra markdown lines inserted between the port
+    table and the configuration list. Empty for a module; an IP (Appendix B)
+    passes its register map and bus-interface sections there, so the whole
+    interface surface — ports, registers, bundles — stays together.
+    """
     port_groups = item.port_groups(opts)
     lines: list[str] = [
         f"# {item.name}",
@@ -281,6 +293,7 @@ def _module_doc(item, opts, explanation, config_hash_value: str) -> str:
         "## Ports",
         "",
         *_md_port_table(port_groups, explanation),
+        *(interface_sections or []),
         "## Configuration",
         "",
     ]
@@ -297,12 +310,47 @@ def _module_doc(item, opts, explanation, config_hash_value: str) -> str:
     return "\n".join(lines)
 
 
+def _ip_interface_sections(item, opts, rtl_module) -> list[str]:
+    """Register-map + bus-interface datasheet sections for an IP (P4-01).
+
+    Also the enforcement point for :func:`~.ips.contract.check_bundles_against_module`:
+    the bundles are validated against the *generated* module before anything is
+    rendered from them, so a bundle naming a port the RTL does not have fails
+    generation loudly instead of producing a datasheet that documents a signal
+    nobody emits.
+    """
+    from .ips.bundles import restyle_bundles
+    from .ips.contract import check_bundles_against_module
+    from .ips.doc import bundles_md, register_map_md
+    from .render.style import build_name_map
+
+    bundles = list(item.bundles(opts))
+    # Validate the *canonical* declaration against the canonical IR module —
+    # both sides are pre-style, so this compares like with like.
+    check_bundles_against_module(rtl_module, bundles)
+
+    sections: list[str] = []
+    regmap = item.register_map(opts)
+    if regmap is not None:
+        sections.extend(register_map_md(regmap))
+
+    # ...then restyle for display, so the datasheet names the ports the RTL
+    # actually declares. See ips/bundles.restyle_bundles for why this step is
+    # not optional.
+    rename = build_name_map(rtl_module, _style_from_options(opts))
+    directions = {rename.get(p.name, p.name): str(p.dir) for p in rtl_module.ports}
+    sections.extend(bundles_md(restyle_bundles(bundles, rename), directions))
+    return sections
+
+
 def generate_files(item_id: str, options: dict) -> GenerateFilesResult:
     """Generate the full file set for a catalog item (API v2, Appendix A.1/A.3).
 
     Snippets produce a single ``rtl`` file via the existing render pipeline.
-    Modules produce an ``rtl`` file plus a ``doc`` file (markdown datasheet from
-    the ExplanationDoc + port groups), a ``tb`` file (feature-flagged by
+    Modules — and IPs, which take the identical path (Appendix B) — produce an
+    ``rtl`` file plus a ``doc`` file (markdown datasheet from
+    the ExplanationDoc + port groups, plus register-map and bus-interface
+    sections for an IP), a ``tb`` file (feature-flagged by
     :data:`EMIT_TB`, built from ``ModuleDef.tb_spec``), and a second ``doc``
     file — a test-plan/verification-checklist document (P3-07,
     :func:`semicraft_core.testplan.generate_testplan`) appended *after* the
@@ -320,9 +368,13 @@ def generate_files(item_id: str, options: dict) -> GenerateFilesResult:
 
     explanation = item.explain(opts)
 
-    if registry.item_kind(item) == "module":
+    kind = registry.item_kind(item)
+    if kind in ("module", "ip"):
         doc_stem = rtl_path.rsplit(".", 1)[0]
-        doc_text = _module_doc(item, opts, explanation, chash)
+        # An IP (Appendix B) is a module plus register-map/bundle metadata, so
+        # it takes the identical path and only adds two datasheet sections.
+        interface_sections = _ip_interface_sections(item, opts, rtl_module) if kind == "ip" else []
+        doc_text = _module_doc(item, opts, explanation, chash, interface_sections)
         files.append(GeneratedFile(path=f"{doc_stem}.md", kind="doc", text=doc_text))
 
         # Smoke TB (P2-13): SV testbench built from ModuleDef.tb_spec against

@@ -131,7 +131,11 @@ export type GenerateResult =
 // ---------------------------------------------------------------------------
 
 /** Item taxonomy in the v2 catalog. More kinds land in later phases. */
-export type ItemKind = "snippet" | "module";
+// Kept in step with the backend catalog taxonomy (plan Appendix A.2/B.1).
+// "ip" landed with the P4-01 IpDef contract; no IP ships yet (the first is
+// P4-02's AXI4-Lite register block), but the kind is here now so an IP cannot
+// arrive and be silently dropped by CatalogPicker's group list.
+export type ItemKind = "snippet" | "module" | "ip";
 
 export type Maturity = "stable" | "beta";
 
