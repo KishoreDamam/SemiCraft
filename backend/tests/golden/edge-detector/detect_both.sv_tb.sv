@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.3.0
 // Testbench: edge_detector_tb (config hash: 83dc7562b8bf)
 // Smoke testbench (stub, compile-checked only) for edge_detector
 //

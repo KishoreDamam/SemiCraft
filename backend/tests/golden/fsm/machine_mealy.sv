@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.3.0
 // Snippet: fsm (config hash: a566a3a4727b)
 // Mealy FSM, 3 states, binary encoding
 //

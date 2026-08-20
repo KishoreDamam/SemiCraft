@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.3.0
 // Snippet: rr_arbiter (config hash: 27815fec3191)
 // 4-way round-robin arbiter, registered grant
 //

@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.3.0
 // Snippet: edge_detector (config hash: ada71c4363a3)
 // Rising-edge detector, one-cycle pulse
 //

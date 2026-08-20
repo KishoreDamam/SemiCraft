@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.3.0
 // Testbench: gray_counter_tb (config hash: bb7461eff1a8)
 // Smoke testbench (stub, compile-checked only) for gray_counter
 //

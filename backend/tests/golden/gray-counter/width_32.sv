@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.3.0
 // Snippet: gray_counter (config hash: 2320a79b9d9a)
 // 32-bit Gray-code counter
 //

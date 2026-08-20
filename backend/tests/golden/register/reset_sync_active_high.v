@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.3.0
 // Snippet: register (config hash: 2c4fcf87c6a4)
 // 8-bit synchronous register
 //

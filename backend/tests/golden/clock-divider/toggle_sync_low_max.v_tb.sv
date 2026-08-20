@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.3.0
 // Testbench: clock_divider_tb (config hash: 6d1b0e8c7c5b)
 // Smoke testbench (stub, compile-checked only) for clock_divider
 //

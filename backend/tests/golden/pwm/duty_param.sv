@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.3.0
 // Snippet: pwm (config hash: b04486fb66e3)
 // PWM generator, 8-bit, fixed duty parameter
 //

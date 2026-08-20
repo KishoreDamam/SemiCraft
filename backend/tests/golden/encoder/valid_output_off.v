@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.3.0
 // Snippet: encoder (config hash: a199a4924cb5)
 // Priority encoder, 8 inputs
 //

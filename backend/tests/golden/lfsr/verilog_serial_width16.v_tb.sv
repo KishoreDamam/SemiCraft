@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.3.0
 // Testbench: lfsr_tb (config hash: d5b18ee6212c)
 // Smoke testbench (stub, compile-checked only) for lfsr
 //

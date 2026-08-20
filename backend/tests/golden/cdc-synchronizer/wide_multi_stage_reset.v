@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.3.0
 // Snippet: cdc_synchronizer (config hash: 09de4954c07e)
 // 4-stage 2-bit CDC synchronizer
 //

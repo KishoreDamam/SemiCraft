@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.3.0
 // Testbench: rr_arbiter_tb (config hash: 005f15481c4a)
 // Smoke testbench (stub, compile-checked only) for rr_arbiter
 //
