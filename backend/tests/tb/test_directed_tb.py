@@ -282,3 +282,44 @@ def test_checks_render_exactly_the_spec_expected_values() -> None:
     rendered_expected = re.findall(r"expected (\d+), got", tb)
     assert len(rendered_expected) == len(spec.checks)
     assert sorted(int(x) for x in rendered_expected) == sorted(c.expected for c in spec.checks)
+
+
+# --------------------------------------------------------------------------- #
+# 5. Naming style reaches every edge-waiting construct
+# --------------------------------------------------------------------------- #
+
+# A prefix + camelCase style renames every net, including the clock. Until
+# P4-01 the TB renderer held the clock name in a module-level constant
+# (`_CLOCK_NAME = "clk"`), which was right only for the default style: with a
+# prefix the DUT clock rendered `p_clk` while every `@(posedge clk)` in the
+# stimulus and the watchdog still said `clk`, so the emitted testbench did not
+# compile at all. No golden case exercises a naming style, so nothing caught
+# it; the reference IP's Verilator run gate did.
+_STYLED = {"naming": {"convention": "camel", "prefix": "p_"}}
+
+
+@pytest.mark.parametrize("item_id", MODULE_IDS)
+def test_every_edge_wait_uses_the_styled_clock(item_id: str) -> None:
+    """Every ``@(edge X)`` in a styled TB must name the styled clock net.
+
+    Checked as a set rather than a substring search so an edge wait on some
+    *other* net would fail too, not just an unstyled one.
+    """
+    res = generate_files(item_id, _STYLED)
+    tb = next(f.text for f in res.files if f.kind == "tb" and f.path.endswith("_tb.sv"))
+    edges = set(re.findall(r"@\((?:pos|neg)edge (\w+)\)", tb))
+    assert edges == {"p_clk"}, (
+        f"{item_id}: testbench waits on {sorted(edges)}; under this naming style "
+        f"the only clock net the RTL declares is 'p_clk'"
+    )
+
+
+@pytest.mark.parametrize("item_id", MODULE_IDS)
+def test_styled_tb_declares_every_net_it_waits_on(item_id: str) -> None:
+    """The net an edge wait names must actually be declared in the TB."""
+    res = generate_files(item_id, _STYLED)
+    tb = next(f.text for f in res.files if f.kind == "tb" and f.path.endswith("_tb.sv"))
+    for net in set(re.findall(r"@\((?:pos|neg)edge (\w+)\)", tb)):
+        assert re.search(rf"^\s*(?:logic|reg|wire)\b[^;]*\b{net}\b", tb, flags=re.M), (
+            f"{item_id}: testbench waits on '{net}', which it never declares:\n{tb}"
+        )

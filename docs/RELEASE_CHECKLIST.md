@@ -142,6 +142,15 @@ Recorded because they were all invisible to the tests that existed at the time:
 - **Checker scaffolds had never been compiled** (P3-06a): the scoreboard-wrapper
   example, in both the golden fixture and the docs, referenced a signal it never
   declared.
+- **Every generated testbench was uncompilable under any non-default naming
+  style** (found at P4-01, fixed before this tag): `render_tb` held the clock net
+  in a module-level `_CLOCK_NAME = "clk"` constant, so a prefix/suffix/camelCase
+  style renamed the DUT clock to (say) `p_clk` while the stimulus and the
+  watchdog still waited on `clk`. Affected all 7 modules in both languages, and
+  shipped in v0.2.0. **No golden case sets a naming style**, so the 165-case
+  matrix only ever exercised the one spelling the constant happened to match;
+  the fix is byte-identical at the default style, which is exactly why nothing
+  failed for two releases. Now normative — TB_SPEC §7a.
 - **`VERSION` was never bumped for v0.2.0** — that release shipped stamping
   "SemiCraft v0.1.0" into every generated artifact. `VERSION` is not part of
   `config_hash`, so nothing detected it. Guarded now by
