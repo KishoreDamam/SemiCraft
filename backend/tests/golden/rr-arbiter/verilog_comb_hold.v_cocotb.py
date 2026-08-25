@@ -33,10 +33,12 @@ async def smoke(dut):
     dut.req.value = 1
     await Timer(1, units="ns")
     assert dut.grant_valid.value == 1, (
-        f"SMOKE FAIL: grant_valid at cycle 1 expected 1, got {int(dut.grant_valid.value)}"
+        f"SMOKE FAIL: grant_valid at cycle 1 expected 1, "
+        f"got {int(dut.grant_valid.value)}"
     )
     assert dut.grant.value == 1, (
-        f"SMOKE FAIL: grant at cycle 1 expected 1, got {int(dut.grant.value)}"
+        f"SMOKE FAIL: grant at cycle 1 expected 1, "
+        f"got {int(dut.grant.value)}"
     )
     await FallingEdge(dut.clk)
     dut.req.value = 1
@@ -52,7 +54,8 @@ async def smoke(dut):
     dut.req.value = 0
     await Timer(1, units="ns")
     assert dut.grant_valid.value == 0, (
-        f"SMOKE FAIL: grant_valid at cycle 7 expected 0, got {int(dut.grant_valid.value)}"
+        f"SMOKE FAIL: grant_valid at cycle 7 expected 0, "
+        f"got {int(dut.grant_valid.value)}"
     )
     await FallingEdge(dut.clk)
     dut.req.value = 128

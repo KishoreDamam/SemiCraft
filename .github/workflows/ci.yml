@@ -92,6 +92,13 @@ jobs:
         # the render_tb hardcoded-clock bug (TB_SPEC §7a).
         run: uv run pytest backend/tests/ips/test_run.py -v
 
+      - name: Run AXI4-Lite register block gate (P4-02)
+        # Runs the generated AXI transaction testbench across nine
+        # configurations, then deliberately breaks the generator four ways and
+        # asserts the suite catches each one. The mutation half is the point:
+        # a bus-protocol sequence can look thorough while proving nothing.
+        run: uv run pytest backend/tests/ips/test_axil_regblock_run.py -v
+
       - name: Run golden TB run gate (P3-03a, enforcing)
         # Executes each module's defaults smoke TB (SEMICRAFT_TB_RUN_ALL=1
         # for the full matrix). Went enforcing after the first advisory run

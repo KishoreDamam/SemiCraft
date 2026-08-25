@@ -29,13 +29,15 @@ async def smoke(dut):
     await FallingEdge(dut.clk)
     await Timer(1, units="ns")
     assert dut.gray.value == 0, (
-        f"SMOKE FAIL: gray at cycle 0 expected 0, got {int(dut.gray.value)}"
+        f"SMOKE FAIL: gray at cycle 0 expected 0, "
+        f"got {int(dut.gray.value)}"
     )
     for _ in range(6):
         await FallingEdge(dut.clk)
     await Timer(1, units="ns")
     assert dut.gray.value == 5, (
-        f"SMOKE FAIL: gray at cycle 6 expected 5, got {int(dut.gray.value)}"
+        f"SMOKE FAIL: gray at cycle 6 expected 5, "
+        f"got {int(dut.gray.value)}"
     )
 
     dut._log.info("SMOKE PASS: gray_counter")

@@ -29,12 +29,14 @@ async def smoke(dut):
     await FallingEdge(dut.clk)
     await Timer(1, units="ns")
     assert dut.pwm_out.value == 1, (
-        f"SMOKE FAIL: pwm_out at cycle 0 expected 1, got {int(dut.pwm_out.value)}"
+        f"SMOKE FAIL: pwm_out at cycle 0 expected 1, "
+        f"got {int(dut.pwm_out.value)}"
     )
     await FallingEdge(dut.clk)
     await Timer(1, units="ns")
     assert dut.pwm_out.value == 1, (
-        f"SMOKE FAIL: pwm_out at cycle 1 expected 1, got {int(dut.pwm_out.value)}"
+        f"SMOKE FAIL: pwm_out at cycle 1 expected 1, "
+        f"got {int(dut.pwm_out.value)}"
     )
     for _ in range(3):
         await FallingEdge(dut.clk)

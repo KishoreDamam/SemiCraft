@@ -195,10 +195,17 @@ def generate_cocotb_tb(module_def, opts, rtl_module: Module) -> str:
                 out.append(
                     f"{_INDENT}assert dut.{net}.value == {chk.expected}, ("
                 )
+                # Split across two f-strings so the emitted line stays inside
+                # the project's 100-column limit. A single line held up for
+                # every module because their expected values are small; a
+                # 32- or 64-bit register value pushed it over, and ruff — which
+                # lints the committed cocotb goldens and is the only thing
+                # checking that generated *Python* is clean — flagged it.
                 out.append(
-                    f'{_INDENT * 2}f"SMOKE FAIL: {net} at cycle {chk.cycle} expected '
-                    f'{chk.expected}, got {{int(dut.{net}.value)}}"'
+                    f'{_INDENT * 2}f"SMOKE FAIL: {net} at cycle {chk.cycle} '
+                    f'expected {chk.expected}, "'
                 )
+                out.append(f'{_INDENT * 2}f"got {{int(dut.{net}.value)}}"')
                 out.append(f"{_INDENT})")
     if pending:
         # Trailing idle cycles still advance time, matching the SV TB.

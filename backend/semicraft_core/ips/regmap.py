@@ -14,8 +14,11 @@ A register has no width of its own: it is exactly ``data_width`` bits, the
 map's bus data width. That is what a memory-mapped register *is*, and giving
 registers an independent width would create a second source of truth that
 address arithmetic would then have to reconcile. Fields need not tile the
-whole word — any bit no field covers is **reserved, reads as zero**, and is
-ignored on write.
+whole word — any bit no field covers is **reserved and reads as zero**.
+
+What a *write* to a reserved bit does is deliberately not specified here: it
+is the generator's policy, not the layout's. ``regblock.py``, for instance,
+rejects such a write with ``SLVERR`` rather than ignoring it.
 
 Frozen means frozen
 -------------------
@@ -126,9 +129,10 @@ class RegisterField(BaseModel):
 class Register(BaseModel):
     """One addressable bus word at byte offset ``offset`` (rules R1, R2, R3).
 
-    Bits not covered by any field are reserved: they read as zero and ignore
-    writes. Field-vs-``data_width`` checks live on :class:`RegisterMap`, which
-    is where the word width is known.
+    Bits not covered by any field are reserved and read as zero; what a write
+    to them does is the generator's policy (see the module docstring). Field-vs-
+    ``data_width`` checks live on :class:`RegisterMap`, which is where the word
+    width is known.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)

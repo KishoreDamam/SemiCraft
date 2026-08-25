@@ -35,13 +35,15 @@ async def smoke(dut):
     dut.d.value = 255
     await Timer(1, units="ns")
     assert dut.pulse.value == 255, (
-        f"SMOKE FAIL: pulse at cycle 2 expected 255, got {int(dut.pulse.value)}"
+        f"SMOKE FAIL: pulse at cycle 2 expected 255, "
+        f"got {int(dut.pulse.value)}"
     )
     await FallingEdge(dut.clk)
     dut.d.value = 0
     await Timer(1, units="ns")
     assert dut.pulse.value == 0, (
-        f"SMOKE FAIL: pulse at cycle 3 expected 0, got {int(dut.pulse.value)}"
+        f"SMOKE FAIL: pulse at cycle 3 expected 0, "
+        f"got {int(dut.pulse.value)}"
     )
     await FallingEdge(dut.clk)
     dut.d.value = 0

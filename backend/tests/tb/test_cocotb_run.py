@@ -44,7 +44,12 @@ except ImportError:  # pragma: no cover
     _HAS_COCOTB = False
 
 _TIMEOUT_SECONDS = 300
-MODULE_IDS = [d.id for d in registry.by_kind("module")]
+# Modules *and* IPs: both emit a cocotb testbench from the same TbSpec, so
+# covering only modules would leave every IP's generated Python committed
+# as a golden and never executed.
+MODULE_IDS = [d.id for d in registry.by_kind("module")] + [
+    d.id for d in registry.by_kind("ip")
+]
 
 pytestmark = [
     pytest.mark.skipif(not _HAS_VERILATOR, reason="verilator not installed"),

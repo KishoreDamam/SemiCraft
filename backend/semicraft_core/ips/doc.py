@@ -64,7 +64,11 @@ def _register_detail(reg: Register, data_width: int, addr_nibbles: int) -> list[
     lines.append("")
     if reg.reserved_mask(data_width):
         lines += [
-            "Bits not listed above are reserved: they read as zero and ignore writes.",
+            (
+                "Bits not listed above are reserved and read as zero. What a "
+                "write to them does is the register block's policy — see the "
+                "IP's own documentation."
+            ),
             "",
         ]
     return lines

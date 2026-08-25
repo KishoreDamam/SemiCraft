@@ -54,15 +54,28 @@ def test_by_kind_module_returns_only_modules() -> None:
 
 
 def test_by_kind_unknown_kind_is_empty() -> None:
-    assert registry.by_kind("ip") == []
+    """A kind nothing declares returns nothing.
+
+    This used to probe ``"ip"``, which stopped being an unknown kind when
+    P4-02 shipped the first one. ``"subsystem"`` is the next reserved kind
+    (Phase 5) and will need the same treatment when it lands — so the probe is
+    a name the taxonomy never plans to use.
+    """
+    assert registry.by_kind("not-a-real-kind") == []
 
 
-def test_all_includes_both_kinds_sorted() -> None:
+def test_all_includes_every_kind_sorted() -> None:
     ids = [i.id for i in registry.all()]
     assert ids == sorted(ids)
     assert "counter" in ids  # snippet
     assert "edge-detector" in ids  # module
-    assert len(ids) == len(registry.by_kind("snippet")) + len(registry.by_kind("module"))
+    assert "axil-regblock" in ids  # ip
+    # The catalog is exactly the union of its kinds: an item whose kind is
+    # missing from this sum would be reachable through all() but invisible to
+    # every by_kind() consumer, including the frontend picker.
+    assert len(ids) == sum(
+        len(registry.by_kind(kind)) for kind in ("snippet", "module", "ip")
+    )
 
 
 def test_by_kind_snippet_matches_pre_phase2_catalog() -> None:

@@ -35,7 +35,10 @@ from semicraft_core.generate import generate_files
 from .conftest import GoldenCase, discover_golden_cases, golden_case_id
 
 _CASES = discover_golden_cases()
-_MODULE_CASES = [c for c in _CASES if c.kind == "module"]
+# IPs (Appendix B) take the identical generate_files path as modules, so
+# they get the same doc/tb/testplan snapshots. Filtering on "module"
+# alone would have silently skipped every IP golden.
+_MODULE_CASES = [c for c in _CASES if c.kind in ("module", "ip")]
 
 
 @pytest.mark.parametrize("case", _CASES, ids=[golden_case_id(c) for c in _CASES])

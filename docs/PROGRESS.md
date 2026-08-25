@@ -207,7 +207,8 @@ file as an extra Verilator source.
 | WP | Status | Notes |
 |---|---|---|
 | P4-01 IpDef contract | DONE | `semicraft_core/ips/`: `IpDef` (a strict superset of `ModuleDef` — an IP is a module plus `register_map(opts)` and `bundles(opts)`), the register-map model (`RegisterField`/`Register`/`RegisterMap`, rules R1–R6), bus-side `PortBundle`s over **flat** ports (no SV `interface` — locked decision), the two datasheet sections, and `check_bundles_against_module` (rules B1–B4) run during generation. Registry discovers a third catalog package; `by_kind("ip")` is empty until P4-02. Contract frozen in plan **Appendix B**; author guide `docs/IPS.md`. 91 tests in `backend/tests/ips/` (6 of them Verilator runs) |
-| Next | **P4-02** — register-map-driven AXI4-Lite register block, the keystone IP P4-05..08 reuse. Also open: wire the cocotb path into `POST /api/v2/simulate` (SV-only today); add a frontend CI job (none exists — which is how a broken `npm ci` lockfile survived; note `npx tsc --noEmit` reports 10 pre-existing errors in *test* files, which `next build` does not typecheck); **v0.3.0 prepared but NOT tagged** (tag belongs on main after merge; CI does not run on this branch) | 2-agent budget per session |
+| P4-02 AXI4-Lite regblock | DONE | `ips/regblock.py`: `build_axil_regblock(name, regmap, ...)` — a plain function over **any** register map, so P4-05..08 splice it in as their bus frontend rather than subclassing a catalog entry. Single-outstanding target, independent AW/W capture, exact byte-strobe merge, registered reads, per-access-type field semantics. `ips/axil_regblock.py` is the first shipped IP (`axil-regblock`). 8 golden cases x 2 languages; every one lints `-Wall` clean, compiles and runs green |
+| Next | **P4-03** (sync + async FIFO) and **P4-04** (RAM/ROM), both of which need no register map; then P4-05..08 on top of the regblock. Also open: wire the cocotb path into `POST /api/v2/simulate` (SV-only today); add a frontend CI job (none exists — which is how a broken `npm ci` lockfile survived; note `npx tsc --noEmit` reports 10 pre-existing errors in *test* files, which `next build` does not typecheck); **v0.3.0 prepared but NOT tagged** (tag belongs on main after merge; CI does not run on this branch) | 2-agent budget per session |
 
 ### P4-01: the contract is proven by a real IP, not by its own docstrings
 
@@ -269,3 +270,67 @@ lesson as above. Worth its own WP.
 P4-01's own new code does restyle correctly — `ips/bundles.restyle_bundles`,
 covered by a test that asserts the rendered bundle names match the RTL under a
 prefix+camelCase style.
+
+### P4-02: three departures from a textbook AXI4-Lite target, all forced by the lint gate
+
+This project lints every generated file with `verilator --lint-only -Wall` and
+requires `status == "clean"` — **zero** warnings. A module that declares an
+input it never reads fails. That single constraint drove three design
+decisions, and I think it drove them in the right direction:
+
+1. **No `awprot`/`arprot`.** A register block enforces no protection policy, so
+   those spec-required inputs would be dead logic. Suppressing the warning with
+   a lint pragma would have blinded the gate to genuine unused-signal bugs in
+   the same file.
+2. **The full byte address is decoded**, not just the word index — so the low
+   offset bits are used, and a misaligned access returns SLVERR instead of
+   silently aliasing onto the containing word.
+3. **Reserved bits must be written as zero** (SLVERR otherwise, with no
+   update). This is what makes every `wdata`/`wstrb` bit genuinely used no
+   matter how sparse the register map is. Verified against a deliberately
+   sparse map with no full-width writable field anywhere: `-Wall` clean in both
+   languages.
+
+The alternative — carving out a lint exception for IPs — would have weakened
+the gate for exactly the most complex generated code in the project.
+
+### The run gate is proved able to fail
+
+An AXI transaction sequence is the kind of test that can look thorough while
+proving nothing: drive some handshakes, check a response code, never actually
+exercise the behaviour. So `tests/ips/test_axil_regblock_run.py` has two
+halves — nine configurations that must pass, and **four deliberately broken
+generators that must fail**: byte strobes ignored, write-only fields leaking on
+read, the `w1c` hardware set dropped, the reserved-bit check disabled.
+
+Building that caught two real problems:
+
+- **A mutation that "passed".** Write-only readback was not covered, because
+  `command_regs` defaulted to 0 and the phase was guarded on having such a
+  register. The default configuration is what the standard CI run gate
+  executes, so the default now includes one of every access type — pinned by
+  `test_default_map_exercises_every_access_type`.
+- **A flawed harness.** My first mutation run patched `regblock`'s globals
+  before the registry had lazily imported `axil_regblock`, so the *reference
+  model* got mutated alongside the hardware and the two agreed. The fix (force
+  the import first) is in the test, with the reason, because the failure mode
+  looks exactly like a passing test.
+
+### Two more doc-vs-behaviour mismatches fixed on the way
+
+- The generic register-map datasheet renderer stated reserved bits "ignore
+  writes". This block **rejects** them with SLVERR. The renderer now describes
+  only what the *model* owns — reserved bits read as zero — and leaves write
+  policy to the generator, which states it in the IP's limitations.
+- `bresp` was computed from the address hit alone, so a write rejected by the
+  reserved-bit check still answered OKAY: the write silently vanished with a
+  success response. Caught by the M4 mutation and pinned by
+  `test_write_response_covers_both_error_causes`.
+
+### Also closed
+
+`test_cocotb_run.py` covered `by_kind("module")` only, so an IP's generated
+cocotb testbench was committed as a golden and never executed — the
+"artifact that exists but does not run" pattern again. It now covers IPs too.
+`test_snapshots.py` filtered golden doc/tb cases on `kind == "module"`, which
+would have silently skipped every IP golden.

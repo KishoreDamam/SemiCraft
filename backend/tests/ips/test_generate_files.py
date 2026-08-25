@@ -137,28 +137,34 @@ def test_both_languages_generate(registered_ip) -> None:
 
 def test_registry_routes_the_ip_to_kind_ip(registered_ip) -> None:
     ids = [item.id for item in registry.by_kind("ip")]
-    assert ids == [registered_ip.id]
+    assert registered_ip.id in ids
     assert registered_ip.id not in [item.id for item in registry.by_kind("module")]
 
 
-def test_catalog_ships_no_ips_yet() -> None:
-    """Honest statement of the current state: P4-01 lands the contract, and
-    the first real IP is P4-02's AXI4-Lite register block.
+#: IPs the catalog actually ships. Pinned so that adding or removing one is a
+#: deliberate edit rather than a silent catalog change — this list started
+#: empty at P4-01, and P4-02 adding the first entry is what made the guard
+#: earn its place.
+SHIPPED_IPS = ["axil-regblock"]
 
-    This is not a permanent invariant — the test is here so that adding the
-    first IP is a deliberate edit rather than a silent catalog change.
-    """
-    assert registry.by_kind("ip") == []
+
+def test_catalog_ships_exactly_the_expected_ips() -> None:
+    assert sorted(item.id for item in registry.by_kind("ip")) == sorted(SHIPPED_IPS)
 
 
 def test_ips_package_is_discovered_without_a_registry_edit() -> None:
-    """The metadata modules in the IP package must not be mistaken for items."""
+    """IP files are found structurally; the package's helper modules are not.
+
+    ``regmap``/``bundles``/``doc``/``contract`` hold models and renderers, not
+    catalog items, so discovery must skip them by name and still pick up every
+    real IP with no registry edit.
+    """
     import semicraft_core.ips as ips_pkg
     from semicraft_core.snippets.registry import _IP_SKIP_MODULES, _discover_package
 
     found: dict = {}
     _discover_package(ips_pkg, found, skip=_IP_SKIP_MODULES)
-    assert found == {}
+    assert sorted(found) == sorted(SHIPPED_IPS)
 
 
 def test_api_maps_a_contract_violation_to_500(registered_ip, monkeypatch) -> None:

@@ -31,13 +31,15 @@ async def smoke(dut):
     dut.duty.value = 0
     await Timer(1, units="ns")
     assert dut.pwm_out.value == 0, (
-        f"SMOKE FAIL: pwm_out at cycle 0 expected 0, got {int(dut.pwm_out.value)}"
+        f"SMOKE FAIL: pwm_out at cycle 0 expected 0, "
+        f"got {int(dut.pwm_out.value)}"
     )
     await FallingEdge(dut.clk)
     dut.duty.value = 2048
     await Timer(1, units="ns")
     assert dut.pwm_out.value == 1, (
-        f"SMOKE FAIL: pwm_out at cycle 1 expected 1, got {int(dut.pwm_out.value)}"
+        f"SMOKE FAIL: pwm_out at cycle 1 expected 1, "
+        f"got {int(dut.pwm_out.value)}"
     )
     await FallingEdge(dut.clk)
     dut.duty.value = 2048

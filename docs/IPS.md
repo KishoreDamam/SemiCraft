@@ -130,7 +130,80 @@ yet: they need real handshakes and transactions to be worth anything, which is
 what P4-09 wires up once the FIFO/UART/SPI/I2C IPs exist. The evidence for
 that deferral is in [PROGRESS.md](PROGRESS.md).
 
+## The AXI4-Lite register block (P4-02)
+
+`axil-regblock` is the first shipped IP and the keystone the protocol IPs
+reuse. The protocol logic lives in `semicraft_core/ips/regblock.py` as a plain
+function over any register map:
+
+```python
+build_axil_regblock(name, regmap, sync_reset=True, description="") -> Module
+```
+
+A UART or SPI IP calls that with its own map rather than inheriting from the
+catalog entry — which is why the engine is a function and not a subclass.
+
+**Protocol shape.** A single-outstanding target. AW and W are captured
+independently (AXI permits either first); `awready`/`wready` are
+`!captured && !bvalid`, functions of registers only, so there is no
+combinational valid→ready path — an AXI violation and a classic deadlock
+source. Reads are registered: `arready = !rvalid`, and the addressed word is
+captured on the AR handshake.
+
+**Three decisions that differ from a textbook target**, each because this
+project lints every generated file with `verilator --lint-only -Wall` and
+treats any warning as a failure. A module that declares inputs it never reads
+does not pass, and a lint pragma would blind the gate to real unused-signal
+bugs — so the design uses every bit it declares:
+
+1. **No `awprot`/`arprot`.** The block enforces no protection policy, so those
+   inputs would be dead. An interconnect that drives them leaves them
+   unconnected.
+2. **The full byte address is decoded**, not just the word index. An access
+   with non-zero low offset bits returns `SLVERR` instead of silently aliasing
+   onto the containing word.
+3. **Reserved bits must be written as zero.** A write trying to set a bit the
+   addressed register does not implement is rejected with `SLVERR` and
+   performs no update. This is standard "SBZ" doctrine made enforceable, and
+   it is what lets every `wdata`/`wstrb` bit be genuinely used no matter how
+   sparse the map is.
+
+The check is layered to avoid a combinational loop: `wr_addr_<reg>` decodes the
+address only, that selects the reserved mask, and `wr_sel_<reg>` — the field
+write-enable — is `wr_addr_<reg> && !wr_reserved`.
+
+**Access-type behaviour**, all exercised by the run gate:
+
+| Access | Storage | Hardware port | Read returns |
+|---|---|---|---|
+| `rw` | yes | output | stored value |
+| `ro` | no | input | the input |
+| `wo` | yes | output | **zero** |
+| `w1c` | yes | output + `<field>_set` input | stored value |
+
+For `w1c`, a hardware set arriving in the same cycle as a software clear
+**wins**, so an event is never silently lost.
+
+**Byte strobes are exact**: `wstrb` expands to a bit mask and each writable
+field updates as `(wdata & mask) | (field & ~mask)` over its own range, so a
+partial write leaves untouched bytes of a multi-byte field alone.
+
+**Why the options are counts.** The obvious design — let the user declare
+registers and fields — is not reachable from the UI: the option form is
+JSON-Schema-driven and has no widget for an array of objects. So the catalog
+entry takes *how many* registers of each access type it should have and builds
+the map itself. Arbitrary maps stay a first-class capability of the engine,
+which is what the protocol IPs use.
+
+**The run gate can fail.** `backend/tests/ips/test_axil_regblock_run.py` runs
+the generated testbench across nine configurations, then deliberately breaks
+the generator four ways — strobes ignored, write-only fields leaking on read,
+the `w1c` set dropped, the reserved-bit check disabled — and asserts the suite
+notices each one. A transaction sequence over a bus protocol is exactly the
+kind of test that can look thorough while proving nothing.
+
 ## Current state
 
-`by_kind("ip")` is empty. P4-01 ships the contract; P4-02's AXI4-Lite register
-block is the first real IP, and the register-map model above is what drives it.
+`by_kind("ip")` ships `axil-regblock`. P4-03..P4-08 add FIFO, RAM/ROM, UART,
+SPI, I2C, timer and interrupt-controller IPs; the protocol ones use the
+register block above as their bus frontend.

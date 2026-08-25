@@ -51,7 +51,7 @@ class GoldenCase:
     options: dict
     language: str  # "sv" | "verilog" — always resolved, even if the case omitted it
     snapshot_name: str  # e.g. "defaults.sv" — filename within tests/golden/<id>/
-    kind: str = "snippet"  # registry.item_kind(item): "snippet" | "module" (P2-14)
+    kind: str = "snippet"  # registry.item_kind(item): "snippet"|"module"|"ip"
 
     @property
     def snapshot_path(self) -> Path:
