@@ -99,6 +99,13 @@ jobs:
         # a bus-protocol sequence can look thorough while proving nothing.
         run: uv run pytest backend/tests/ips/test_axil_regblock_run.py -v
 
+      - name: Run synchronous FIFO gate (P4-03a)
+        # Eight configurations plus four deliberately broken generators that
+        # must fail: flow control removed, read index wrong, full stuck low,
+        # empty stuck low. A FIFO test that only pushes and pops never touches
+        # boundary flow control or ordering.
+        run: uv run pytest backend/tests/ips/test_sync_fifo_run.py -v
+
       - name: Run golden TB run gate (P3-03a, enforcing)
         # Executes each module's defaults smoke TB (SEMICRAFT_TB_RUN_ALL=1
         # for the full matrix). Went enforcing after the first advisory run

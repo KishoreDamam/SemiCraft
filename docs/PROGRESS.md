@@ -208,7 +208,9 @@ file as an extra Verilator source.
 |---|---|---|
 | P4-01 IpDef contract | DONE | `semicraft_core/ips/`: `IpDef` (a strict superset of `ModuleDef` — an IP is a module plus `register_map(opts)` and `bundles(opts)`), the register-map model (`RegisterField`/`Register`/`RegisterMap`, rules R1–R6), bus-side `PortBundle`s over **flat** ports (no SV `interface` — locked decision), the two datasheet sections, and `check_bundles_against_module` (rules B1–B4) run during generation. Registry discovers a third catalog package; `by_kind("ip")` is empty until P4-02. Contract frozen in plan **Appendix B**; author guide `docs/IPS.md`. 91 tests in `backend/tests/ips/` (6 of them Verilator runs) |
 | P4-02 AXI4-Lite regblock | DONE | `ips/regblock.py`: `build_axil_regblock(name, regmap, ...)` — a plain function over **any** register map, so P4-05..08 splice it in as their bus frontend rather than subclassing a catalog entry. Single-outstanding target, independent AW/W capture, exact byte-strobe merge, registered reads, per-access-type field semantics. `ips/axil_regblock.py` is the first shipped IP (`axil-regblock`). 8 golden cases x 2 languages; every one lints `-Wall` clean, compiles and runs green |
-| Next | **P4-03** (sync + async FIFO) and **P4-04** (RAM/ROM), both of which need no register map; then P4-05..08 on top of the regblock. Also open: wire the cocotb path into `POST /api/v2/simulate` (SV-only today); add a frontend CI job (none exists — which is how a broken `npm ci` lockfile survived; note `npx tsc --noEmit` reports 10 pre-existing errors in *test* files, which `next build` does not typecheck); **v0.3.0 prepared but NOT tagged** (tag belongs on main after merge; CI does not run on this branch) | 2-agent budget per session |
+| P4-03a sync FIFO | DONE | `ips/sync_fifo.py`: power-of-two depth, wrap-bit pointers giving exact full/empty/count, registered reads, overflow/underflow ignored. **First consumer of the IR `Memory` node** (spec'd since IR v0.2, never emitted by any generator). Exercises the two `IpDef` branches the regblock could not: `register_map -> None`, and two bundles sharing one clock. 9 golden cases x 2 languages, all lint-clean, compiled and run |
+| P4-03b async FIFO | BLOCKED — see below | needs a two-clock testbench; a tied-clock TB would verify the FIFO logic and nothing about the CDC |
+| Next | **P4-04** (RAM/ROM — single clock, no register map, reuses the `Memory` node the FIFO just proved out); then P4-05..08 on top of the regblock. Also open: wire the cocotb path into `POST /api/v2/simulate` (SV-only today); add a frontend CI job (none exists — which is how a broken `npm ci` lockfile survived; note `npx tsc --noEmit` reports 10 pre-existing errors in *test* files, which `next build` does not typecheck); **v0.3.0 prepared but NOT tagged** (tag belongs on main after merge; CI does not run on this branch) | 2-agent budget per session |
 
 ### P4-01: the contract is proven by a real IP, not by its own docstrings
 
@@ -334,3 +336,51 @@ cocotb testbench was committed as a golden and never executed — the
 "artifact that exists but does not run" pattern again. It now covers IPs too.
 `test_snapshots.py` filtered golden doc/tb cases on `kind == "module"`, which
 would have silently skipped every IP golden.
+
+### P4-03a: the sync FIFO, and why the async FIFO is not here
+
+The plan pairs a synchronous FIFO with a gray-pointer asynchronous one. The
+sync FIFO shipped; the async FIFO is **deferred, with a concrete unblock
+path**, and the reason is the same one that has driven most of this project's
+decisions.
+
+The testbench framework drives **one** clock: `TbSpec.clock` is a single name
+and `TbModule` holds a single `ClockGen`. An async FIFO's defining property is
+safe transfer between two *independent* clocks. Tying both clocks together in
+the testbench would exercise the pointer and memory logic and **nothing** about
+the clock-domain crossing — while the datasheet claimed CDC safety. That is
+the "artifact that exists but does not run" pattern, and CDC bugs are exactly
+the class that cannot be caught by reading the RTL.
+
+Unblocking it is a TB-IR work package: a second clock on `TbSpec`, a clock
+selector on `WaitCycles`, and per-clock cycle anchoring for vectors and checks.
+That touches TB_SPEC, a frozen contract, so it needs a recorded decision first
+rather than a silent edit.
+
+### What the FIFO proved out beyond itself
+
+- **The IR `Memory` node had never been used.** Added in IR v0.2 (P2-02/03),
+  spec'd in IR_SPEC §10.2, unit-tested — and no generator ever emitted one, so
+  the render path was untried in a real module. It works: `logic [7:0] mem [8]`
+  in SystemVerilog, `reg [7:0] mem [0:15]` in Verilog-2001, both lint-clean.
+  Verified before building on it rather than after.
+- **`register_map -> None` and shared-clock bundles.** P4-01 declared both
+  branches; nothing demonstrated either until now. The datasheet correctly
+  omits the register-map section, and the `wr`/`rd` bundles share `clk`.
+
+### Keeping a deep FIFO's testbench small
+
+Filling a 1024-entry FIFO one driven cycle per entry would emit a testbench of
+thousands of lines — the shape that produced a 65k-line clock-divider TB and
+timed out the compile gate. The fill and drain phases instead hold their enable
+for a single driven cycle and then idle, which `generate_tb` coalesces into one
+`repeat (N)`. A 1024-deep FIFO's TB is under 400 lines, pinned by a test.
+
+### The run gate, again with a mutation half
+
+Four broken generators that must fail: flow control removed (`!full`/`!empty`
+guards neutered), read index taken from the write pointer, `full` stuck low,
+`empty` stuck low. All four are caught. A FIFO testbench that pushes a few
+words and pops them back is easy to write and proves almost nothing — the two
+properties that matter are boundary flow control and ordering, and those are
+what the mutations target.

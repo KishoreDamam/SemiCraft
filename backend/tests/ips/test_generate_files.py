@@ -145,7 +145,7 @@ def test_registry_routes_the_ip_to_kind_ip(registered_ip) -> None:
 #: deliberate edit rather than a silent catalog change — this list started
 #: empty at P4-01, and P4-02 adding the first entry is what made the guard
 #: earn its place.
-SHIPPED_IPS = ["axil-regblock"]
+SHIPPED_IPS = ["axil-regblock", "sync-fifo"]
 
 
 def test_catalog_ships_exactly_the_expected_ips() -> None:

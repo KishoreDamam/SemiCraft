@@ -202,8 +202,66 @@ the `w1c` set dropped, the reserved-bit check disabled — and asserts the suite
 notices each one. A transaction sequence over a bus protocol is exactly the
 kind of test that can look thorough while proving nothing.
 
+## The synchronous FIFO (P4-03a)
+
+`sync-fifo` is the second shipped IP, and it exists partly to exercise the two
+`IpDef` branches the register block could not:
+
+- **`register_map` returns `None`** — a datapath IP is not forced to invent
+  software-visible registers, and its datasheet simply has no register-map
+  section.
+- **Two bundles share one clock** (`wr` and `rd`). That is the case the
+  "clocks are referenced, not owned" rule exists for: a port belongs to at
+  most one bundle, so a member clock would make a two-port IP illegal.
+
+It is also the **first consumer of the IR `Memory` node**, which had been
+spec'd (IR_SPEC §10.2) and unit-tested since IR v0.2 without any generator
+emitting one.
+
+**Pointer scheme.** Depth is a power of two and both pointers carry one extra
+most-significant bit:
+
+```
+empty = wptr == rptr
+full  = wptr[AW] != rptr[AW] && wptr[AW-1:0] == rptr[AW-1:0]
+count = wptr - rptr                       // exact, 0..DEPTH
+```
+
+The wrap bit is what makes `count` correct across a wrap with no saturating
+logic. A non-power-of-two depth is rejected at validation with the two nearest
+legal values, because the comparison is only exact for a power of two.
+
+**Reads are registered** — `rd_data` is valid the cycle after an accepted
+`rd_en`. There is no first-word-fall-through option: FWFT is a different read
+contract, not a flag, and offering both behind one boolean yields a datasheet
+that describes neither exactly. Overflow and underflow are ignored silently.
+
+**The testbench stays small at any depth.** The fill and drain phases hold
+their enable for a single driven cycle and then idle, which `generate_tb`
+coalesces into one `repeat (N)` — a 1024-deep FIFO's testbench is under 400
+lines. A test pins that, because the clock divider once produced a 65k-line
+testbench that timed out the compile gate.
+
+The run gate has the same mutation half as the register block's: flow control
+removed, read index wrong, `full` stuck low, `empty` stuck low. A FIFO test
+that only pushes a few words and pops them back never touches the two things
+that actually make a FIFO correct — boundary flow control and ordering.
+
 ## Current state
 
-`by_kind("ip")` ships `axil-regblock`. P4-03..P4-08 add FIFO, RAM/ROM, UART,
-SPI, I2C, timer and interrupt-controller IPs; the protocol ones use the
-register block above as their bus frontend.
+`by_kind("ip")` ships `axil-regblock` and `sync-fifo`.
+
+**Deferred: the asynchronous (CDC) FIFO.** P4-03 pairs the sync FIFO with a
+gray-pointer async FIFO, which is not shipped here. The testbench framework
+drives a single clock (`TbSpec.clock`, one `ClockGen` in `TbModule`), so an
+async FIFO's defining property — safe transfer between two independent clocks
+— is not expressible in a generated testbench. Tying both clocks together
+would produce a testbench that exercises the FIFO logic and *nothing* about
+the CDC, while the datasheet claimed CDC safety. That is the
+"artifact that exists but does not run" pattern this project keeps finding,
+and CDC bugs are exactly what cannot be caught by reading.
+
+Unblocking it is a TB-IR work package: a second clock on `TbSpec`, a clock
+selector on `WaitCycles`, and per-clock cycle anchoring for vectors and
+checks — a change to a frozen contract (TB_SPEC), so it needs a recorded
+decision first.
