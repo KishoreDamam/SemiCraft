@@ -212,7 +212,8 @@ file as an extra Verilator source.
 | P4-03b async FIFO | BLOCKED — see below | needs a two-clock testbench; a tied-clock TB would verify the FIFO logic and nothing about the CDC |
 | P4-04a sync RAM | DONE | `ips/ram.py`: single-port and simple dual-port synchronous RAM. **No reset at all** (storage must not be cleared; resetting only the output register is what blocks block-RAM inference), so it extends `CommonOptions` not `ClockedOptions` and `TbSpec.reset is None`. Read-during-write returns OLD data (READ_FIRST), pinned by a directed check and by a write-first mutation in the run gate. 7 golden cases x 2 languages |
 | P4-04b ROM | BLOCKED — see below | needs memory initialisation, which the synthesizable IR does not express; two routes, both needing a recorded IR decision first |
-| Next | **P4-05..08** on top of the AXI register block (UART, SPI, I2C, timer + interrupt controller). The two blocked items (async FIFO, ROM) each need a recorded contract decision before they can start. Also open: wire the cocotb path into `POST /api/v2/simulate` (SV-only today); add a frontend CI job (none exists — which is how a broken `npm ci` lockfile survived; note `npx tsc --noEmit` reports 10 pre-existing errors in *test* files, which `next build` does not typecheck); **v0.3.0 prepared but NOT tagged** (tag belongs on main after merge; CI does not run on this branch) | 2-agent budget per session |
+| P4-05a composition + GPIO | DONE | `build_axil_regblock(..., field_ports=False)` emits the hardware face as internal signals, so a peripheral splices the register block into its own module — one flat module, no submodule instantiation. Standalone goldens byte-identical. `AxilSequencer`/`RegisterModel` promoted into `regblock.py` so composed IPs share the AXI timing. First composed IP: `axil-gpio` (DIR/OUT/IN + input synchroniser). 7 golden cases x 2 languages |
+| Next | **P4-05b UART** on the composition proved above, then SPI/I2C/timer. The two blocked items (async FIFO, ROM) each need a recorded contract decision before they can start. Also open: wire the cocotb path into `POST /api/v2/simulate` (SV-only today); add a frontend CI job (none exists — which is how a broken `npm ci` lockfile survived; note `npx tsc --noEmit` reports 10 pre-existing errors in *test* files, which `next build` does not typecheck); **v0.3.0 prepared but NOT tagged** (tag belongs on main after merge; CI does not run on this branch) | 2-agent budget per session |
 
 ### P4-01: the contract is proven by a real IP, not by its own docstrings
 
@@ -443,3 +444,41 @@ almost no generated file: the license banner contains "Free". Fixed with a
 whole-identifier regex helper, and the same helper now guards the `rst`/`addr`
 absence checks in that file — a bare substring test for a short identifier is
 close to worthless against generated text.
+
+### P4-05a: prove the composition before betting a UART on it
+
+P4-05 is the UART, and its real prerequisite is the *composition* mechanism —
+a peripheral needs its own logic plus a register frontend, and nothing had ever
+spliced the register block into a larger module. So the mechanism landed first,
+proved on the simplest peripheral that can exercise it, rather than being
+debugged for the first time underneath a baud-rate generator.
+
+`build_axil_regblock(..., field_ports=False)` emits the hardware face as
+internal signals instead of ports; the peripheral appends its pins and logic
+and gets one flat module. Two obligations fall out of the `-Wall` gate: a
+composer must **use every field it declares** (an unused signal fails), and
+must **drive the read-only ones** (the block reads them; nothing else will).
+The standalone `axil-regblock` goldens are byte-identical, which is the check
+that the flag did not change the default path.
+
+`AxilSequencer` and `RegisterModel` moved into `regblock.py`, beside the
+generator whose timing they encode, so a composed IP's testbench cannot drift
+from the standalone block's.
+
+### The GPIO check that nearly did not work
+
+A synchroniser is invisible to an ordinary readback test: read `IN` after the
+pins settle and it passes whether the guard exists or not. So the testbench
+also reads `IN` while the value is still in flight and requires the **old**
+one.
+
+The first version of that check was placed wrong. A read issued in the *same*
+cycle as the pin change captures one edge later, which reads old even with no
+synchroniser at all — the `one_stage_short` mutation sailed straight through
+it. Delaying the read by one cycle is what makes it discriminate. Both
+mutations (bypass, and one stage instead of two) now fail as they should.
+
+Worth recording because a missing metastability guard is the classic defect
+that **never shows up in simulation**: the check has to be timed deliberately,
+and writing it by feel produced something that looked right and tested
+nothing.

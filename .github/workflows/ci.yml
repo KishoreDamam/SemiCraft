@@ -112,6 +112,13 @@ jobs:
         # list distinguishes the two.
         run: uv run pytest backend/tests/ips/test_ram_run.py -v
 
+      - name: Run AXI4-Lite GPIO gate (P4-05a)
+        # The first composed IP (a spliced register block). Its mutations
+        # include bypassing the input synchroniser and dropping it to a single
+        # stage — a missing metastability guard never shows up in simulation,
+        # so the testbench has to be timed to catch it.
+        run: uv run pytest backend/tests/ips/test_axil_gpio_run.py -v
+
       - name: Run golden TB run gate (P3-03a, enforcing)
         # Executes each module's defaults smoke TB (SEMICRAFT_TB_RUN_ALL=1
         # for the full matrix). Went enforcing after the first advisory run

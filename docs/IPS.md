@@ -280,9 +280,66 @@ Bundle layout follows the port mode: single-port is *one* bundle, because
 `addr` is shared and a port may belong to at most one bundle; simple dual-port
 splits into `wr` and `rd`.
 
+## Composing a peripheral onto the register block (P4-05a)
+
+Every protocol IP is its own logic plus a register frontend. The mechanism is
+a flag on the generator:
+
+```python
+core = build_axil_regblock(name, regmap, field_ports=False)
+Module(ports=[*core.ports, *my_pins], items=[*core.items, *my_logic])
+```
+
+With `field_ports=False` the hardware face is emitted as **internal signals**
+instead of ports, and only the clock, reset and AXI signals stay ports. The
+peripheral appends its own pins and logic and gets **one flat module** — no
+submodule instantiation, so no extra file and no port-mapping to keep in sync.
+
+Two obligations come with it:
+
+- **Use every field you declare.** An unused signal is a `-Wall` failure, and
+  the lint gate requires zero warnings.
+- **Drive the read-only fields.** The register block reads them; nothing else
+  will.
+
+`AxilSequencer` and `RegisterModel` live in `regblock.py` alongside the
+generator whose timing they encode, so a composed IP's testbench describes the
+AXI handshake in exactly one place and cannot drift from the standalone
+block's.
+
+`axil-gpio` is the first IP built this way — deliberately the simplest
+peripheral that exercises the mechanism, so the splice was proved before a
+baud-rate generator was sitting on top of it.
+
+## The AXI4-Lite GPIO (P4-05a)
+
+Three registers — `DIR`, `OUT`, `IN` — driving `gpio_oe`, `gpio_out` and
+reading `gpio_in`. Bits above `num_pins` are reserved, so writing one returns
+SLVERR: the register block's policy, inherited unchanged.
+
+**Inputs are synchronised, not sampled.** `gpio_in` comes from a pin and is
+asynchronous to `aclk`, so it passes through two (configurable) flops before
+reaching `IN`. That costs `input_sync_stages` clocks of latency, which the
+datasheet states.
+
+Verifying that is subtler than it looks, and worth knowing if you write a
+similar testbench. A read of `IN` after the pins settle passes whether or not
+the synchroniser exists — so the testbench also reads `IN` while the new value
+is still in flight and requires the **old** one. The offset matters: a read
+issued in the same cycle as the pin change captures one edge later and reads
+old even with no synchroniser at all. Delaying the read by one cycle is what
+makes it discriminate, and two mutations pin it — bypassing the synchroniser,
+and dropping it to a single stage. A missing metastability guard never shows
+up in simulation, so the check has to be timed deliberately rather than
+written by feel.
+
+**No bidirectional port.** The IR has no `inout`, so the pad direction is a
+separate `gpio_oe` output and the integrator instantiates the tri-state
+buffer — which is also what lets the same RTL target FPGA and ASIC flows.
+
 ## Current state
 
-`by_kind("ip")` ships `axil-regblock`, `sync-fifo` and `sync-ram`.
+`by_kind("ip")` ships `axil-regblock`, `sync-fifo`, `sync-ram` and `axil-gpio`.
 
 **Deferred: ROM with defined contents.** P4-04 pairs the RAM with a ROM. A
 ROM is only useful if its contents are specified, and there is no way to

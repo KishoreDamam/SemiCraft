@@ -136,6 +136,7 @@ from ..ir.nodes import (
     UnaryOp,
     UnaryOpKind,
 )
+from ..modules.contract import Check
 from ..version import VERSION
 from .contract import IpContractError
 from .regmap import Register, RegisterField, RegisterMap
@@ -150,6 +151,8 @@ __all__ = [
     "AXI_RESP_SLVERR",
     "AXI_CLOCK",
     "AXI_RESET",
+    "RegisterModel",
+    "AxilSequencer",
 ]
 
 #: AXI response codes actually emitted. ``DECERR`` (2'b11) is the
@@ -596,6 +599,7 @@ def build_axil_regblock(
     *,
     sync_reset: bool = True,
     description: str = "",
+    field_ports: bool = True,
 ) -> Module:
     """Build the IR for an AXI4-Lite register block serving ``regmap``.
 
@@ -603,9 +607,24 @@ def build_axil_regblock(
     asynchronous active-low reset (the polarity is fixed by the protocol).
     Pure: the same arguments always produce identical IR.
 
+    ``field_ports`` decides what the hardware face becomes:
+
+    - ``True`` (default) — every field is a **port**, so the result is a
+      standalone register-block module. This is what the ``axil-regblock``
+      catalog IP emits.
+    - ``False`` — every field is an internal **signal** instead, and only the
+      clock, reset and AXI signals stay ports. That makes the result
+      *spliceable*: a peripheral takes ``module.ports`` and ``module.items``,
+      appends its own pins and logic, and gets one flat module with an AXI
+      frontend. This is how P4-05..P4-08 reuse the register block, and it is
+      why the generator is a function over a register map rather than
+      something welded to a catalog entry.
+
+    A spliced composer must **use every field it declares**: an unused signal
+    is a ``-Wall`` failure, and the project's lint gate requires zero warnings.
+
     Raises :class:`~.contract.IpContractError` if the map cannot be served —
-    an address space too small to hold a word index, or hardware-face port
-    names that collide with each other or with an AXI signal.
+    an empty map, or hardware-face names that collide with each other.
     """
     data_width = regmap.data_width
     addr_width = regmap.addr_width
@@ -618,7 +637,19 @@ def build_axil_regblock(
     _check_port_names(regmap)
 
     strb_width = data_width // 8
-    ports = _axi_port_list(data_width, addr_width) + _hw_port_list(regmap)
+    ports = _axi_port_list(data_width, addr_width)
+    hw_face = _hw_port_list(regmap)
+    hw_signals: list[ModuleItem] = []
+    if field_ports:
+        ports = ports + hw_face
+    else:
+        # Same names, same widths — declared as signals so the enclosing module
+        # owns them. The regblock's always_ff still drives the writable ones and
+        # the read mux still reads them; the peripheral drives the read-only
+        # ones and consumes the rest.
+        hw_signals = [
+            Signal(p.name, p.dtype, doc=p.doc) for p in hw_face
+        ]
 
     signals: list[ModuleItem] = [
         Signal("aw_hs", bit(), doc="Write address captured, awaiting the data beat"),
@@ -706,6 +737,7 @@ def build_axil_regblock(
     )
 
     items: list[ModuleItem] = [
+        *hw_signals,
         *signals,
         *handshake,
         *_decode_signals(regmap, addr_width),
@@ -724,3 +756,203 @@ def build_axil_regblock(
         ports=ports,
         items=items,
     )
+
+
+# --------------------------------------------------------------------------- #
+# Testbench support: a reference model and an AXI transaction sequencer
+# --------------------------------------------------------------------------- #
+#
+# These live here, next to the generator whose timing they encode, because
+# every IP that splices in this register block needs the same two pieces to
+# write a directed testbench. Keeping them beside the RTL builder means the
+# handshake timing is documented once and cannot drift between IPs.
+
+
+class RegisterModel:
+    """A Python mirror of the register block's write/read rules.
+
+    Exists so every expected value in the testbench is *derived from the
+    specification* — the same access-type rules the generator implements —
+    rather than read back out of a simulation. Calibrating expectations from
+    observed output is how a bug gets frozen in as ground truth; this project
+    has done it once already (clock-divider, P3-09a) and the lesson is
+    recorded in PROGRESS.md.
+    """
+
+    def __init__(self, regmap: RegisterMap) -> None:
+        self.regmap = regmap
+        self.dw = regmap.data_width
+        self.value: dict[tuple[str, str], int] = {}
+        for reg in regmap.registers:
+            for f in reg.fields:
+                self.value[(reg.name, f.name)] = 0 if f.access == "ro" else f.reset
+
+    def _at(self, addr: int) -> Register | None:
+        for reg in self.regmap.registers:
+            if reg.offset == addr:
+                return reg
+        return None
+
+    def bit_mask(self, strb: int) -> int:
+        mask = 0
+        for byte in range(self.dw // 8):
+            if strb >> byte & 1:
+                mask |= 0xFF << (byte * 8)
+        return mask
+
+    def write_response(self, addr: int, data: int, strb: int) -> int:
+        reg = self._at(addr)
+        if reg is None:
+            return AXI_RESP_SLVERR
+        if data & self.bit_mask(strb) & write_reserved_mask(reg, self.dw):
+            return AXI_RESP_SLVERR
+        return AXI_RESP_OKAY
+
+    def write(self, addr: int, data: int, strb: int) -> int:
+        """Apply a write and return the response it produces."""
+        resp = self.write_response(addr, data, strb)
+        if resp != AXI_RESP_OKAY:
+            return resp
+        reg = self._at(addr)
+        assert reg is not None
+        wmask = self.bit_mask(strb)
+        for f in reg.fields:
+            if f.access == "ro":
+                continue
+            key = (reg.name, f.name)
+            fmask = (1 << f.width) - 1
+            new = (data >> f.lsb) & fmask
+            keep = (wmask >> f.lsb) & fmask
+            if f.access == "w1c":
+                self.value[key] &= ~(new & keep) & fmask
+            else:
+                self.value[key] = (new & keep) | (self.value[key] & ~keep & fmask)
+        return resp
+
+    def hardware_set(self, reg_name: str, field_name: str, value: int) -> None:
+        """Apply a ``w1c`` field's hardware set input."""
+        self.value[(reg_name, field_name)] |= value
+
+    def drive_ro(self, reg_name: str, field_name: str, value: int) -> None:
+        self.value[(reg_name, field_name)] = value
+
+    def read(self, addr: int) -> tuple[int, int]:
+        reg = self._at(addr)
+        if reg is None:
+            return 0, AXI_RESP_SLVERR
+        word = 0
+        for f in reg.fields:
+            if f.access == "wo":
+                continue  # write-only fields read as zero
+            word |= (self.value[(reg.name, f.name)] & ((1 << f.width) - 1)) << f.lsb
+        return word, AXI_RESP_OKAY
+
+    def field(self, reg_name: str, field_name: str) -> int:
+        return self.value[(reg_name, field_name)]
+
+
+# --------------------------------------------------------------------------- #
+# AXI transaction sequencer for the directed testbench
+# --------------------------------------------------------------------------- #
+
+
+class AxilSequencer:
+    """Turns AXI transactions into ``TbSpec`` vectors and checks.
+
+    The per-transaction cycle arithmetic lives here once rather than in a
+    hand-written cycle table, because a hand-written table is where off-by-one
+    errors hide. Each method documents the handshake timing it assumes; those
+    assumptions come from the generator in ``regblock.py`` and are what the
+    Verilator run gate actually tests.
+    """
+
+    def __init__(self) -> None:
+        self.vectors: list[dict[str, int]] = []
+        self.checks: list[Check] = []
+        self.cycle = 0
+
+    def _drive(self, cycle: int, **signals: int) -> None:
+        while len(self.vectors) <= cycle:
+            self.vectors.append({})
+        self.vectors[cycle].update(signals)
+
+    def expect(self, cycle: int, signal: str, value: int) -> None:
+        self.checks.append(Check(cycle=cycle, signal=signal, expected=value))
+
+    def drive(self, **signals: int) -> None:
+        """Drive non-AXI inputs at the current cycle.
+
+        A composed IP has pins of its own to stimulate between bus
+        transactions — GPIO drives its input pins, a UART its serial line —
+        and those drives have to land on the shared cycle timeline rather than
+        in a separate one.
+        """
+        self._drive(self.cycle, **signals)
+
+    def idle(self, cycles: int = 1) -> None:
+        self._drive(self.cycle + cycles - 1)
+        self.cycle += cycles
+
+    def write(
+        self,
+        addr: int,
+        data: int,
+        strb: int,
+        resp: int,
+        after: list[tuple[str, int]],
+    ) -> None:
+        """One write burst, issued from an idle bus.
+
+        Timing (from ``regblock.py``): both ``awready`` and ``wready`` are high
+        on an idle bus, so cycle ``c`` completes the AW and W handshakes at the
+        next edge. Cycle ``c+1`` holds both captured, which is when ``wr_exec``
+        is true, so the write lands and ``bvalid`` rises at the following edge.
+        Cycle ``c+2`` therefore observes the response *and* the updated field
+        outputs; ``bready`` was raised at ``c`` so ``bvalid`` clears by ``c+3``,
+        leaving the bus idle again.
+        """
+        c = self.cycle
+        self._drive(c, awaddr=addr, awvalid=1, wdata=data, wstrb=strb, wvalid=1, bready=1)
+        self._drive(c + 1, awvalid=0, wvalid=0)
+        self.expect(c + 2, "bvalid", 1)
+        self.expect(c + 2, "bresp", resp)
+        for port, value in after:
+            self.expect(c + 2, port, value)
+        self.expect(c + 3, "bvalid", 0)
+        self.cycle = c + 3
+
+    def read(
+        self,
+        addr: int,
+        data: int,
+        resp: int,
+        extra: dict[str, int] | None = None,
+    ) -> None:
+        """One read burst, issued from an idle bus.
+
+        ``arready`` is high whenever no read data is pending, so cycle ``c``
+        completes the AR handshake and the addressed word is captured at the
+        next edge; cycle ``c+1`` observes ``rvalid``/``rdata``/``rresp``.
+        ``extra`` drives hardware-face inputs in the same cycle as the address,
+        which is early enough for a read-only field to be sampled by that edge.
+        """
+        c = self.cycle
+        self._drive(c, araddr=addr, arvalid=1, rready=1, **(extra or {}))
+        self._drive(c + 1, arvalid=0)
+        self.expect(c + 1, "rvalid", 1)
+        self.expect(c + 1, "rdata", data)
+        self.expect(c + 1, "rresp", resp)
+        self.cycle = c + 2
+
+    def pulse_input(self, port: str, value: int, after: list[tuple[str, int]]) -> None:
+        """Drive a hardware input for one cycle and check what it produced.
+
+        Used for ``w1c`` set inputs: driven at cycle ``c``, applied by the edge
+        into ``c+1``, released there so the following edge cannot re-apply it.
+        """
+        c = self.cycle
+        self._drive(c, **{port: value})
+        self._drive(c + 1, **{port: 0})
+        for target, expected in after:
+            self.expect(c + 1, target, expected)
+        self.cycle = c + 2

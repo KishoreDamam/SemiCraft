@@ -39,14 +39,15 @@ from ..assertions.spec import (
     ResetKnownValue,
 )
 from ..ir.nodes import Module
-from ..modules.contract import Check, PortGroup, TbSpec
+from ..modules.contract import PortGroup, TbSpec
 from ..snippets.contract import CommonOptions, ExplanationDoc, SignalDoc
 from .bundles import BundlePort, PortBundle
 from .regblock import (
     AXI_CLOCK,
     AXI_RESET,
     AXI_RESP_OKAY,
-    AXI_RESP_SLVERR,
+    AxilSequencer,
+    RegisterModel,
     axil_ports,
     build_axil_regblock,
     hardware_ports,
@@ -282,191 +283,6 @@ def _description(opts: AxilRegblockOptions) -> str:
 
 
 # --------------------------------------------------------------------------- #
-# A reference model of the block, used only to derive expected values
-# --------------------------------------------------------------------------- #
-
-
-class _Model:
-    """A Python mirror of the register block's write/read rules.
-
-    Exists so every expected value in the testbench is *derived from the
-    specification* — the same access-type rules the generator implements —
-    rather than read back out of a simulation. Calibrating expectations from
-    observed output is how a bug gets frozen in as ground truth; this project
-    has done it once already (clock-divider, P3-09a) and the lesson is
-    recorded in PROGRESS.md.
-    """
-
-    def __init__(self, regmap: RegisterMap) -> None:
-        self.regmap = regmap
-        self.dw = regmap.data_width
-        self.value: dict[tuple[str, str], int] = {}
-        for reg in regmap.registers:
-            for f in reg.fields:
-                self.value[(reg.name, f.name)] = 0 if f.access == "ro" else f.reset
-
-    def _at(self, addr: int) -> Register | None:
-        for reg in self.regmap.registers:
-            if reg.offset == addr:
-                return reg
-        return None
-
-    def bit_mask(self, strb: int) -> int:
-        mask = 0
-        for byte in range(self.dw // 8):
-            if strb >> byte & 1:
-                mask |= 0xFF << (byte * 8)
-        return mask
-
-    def write_response(self, addr: int, data: int, strb: int) -> int:
-        reg = self._at(addr)
-        if reg is None:
-            return AXI_RESP_SLVERR
-        if data & self.bit_mask(strb) & write_reserved_mask(reg, self.dw):
-            return AXI_RESP_SLVERR
-        return AXI_RESP_OKAY
-
-    def write(self, addr: int, data: int, strb: int) -> int:
-        """Apply a write and return the response it produces."""
-        resp = self.write_response(addr, data, strb)
-        if resp != AXI_RESP_OKAY:
-            return resp
-        reg = self._at(addr)
-        assert reg is not None
-        wmask = self.bit_mask(strb)
-        for f in reg.fields:
-            if f.access == "ro":
-                continue
-            key = (reg.name, f.name)
-            fmask = (1 << f.width) - 1
-            new = (data >> f.lsb) & fmask
-            keep = (wmask >> f.lsb) & fmask
-            if f.access == "w1c":
-                self.value[key] &= ~(new & keep) & fmask
-            else:
-                self.value[key] = (new & keep) | (self.value[key] & ~keep & fmask)
-        return resp
-
-    def hardware_set(self, reg_name: str, field_name: str, value: int) -> None:
-        """Apply a ``w1c`` field's hardware set input."""
-        self.value[(reg_name, field_name)] |= value
-
-    def drive_ro(self, reg_name: str, field_name: str, value: int) -> None:
-        self.value[(reg_name, field_name)] = value
-
-    def read(self, addr: int) -> tuple[int, int]:
-        reg = self._at(addr)
-        if reg is None:
-            return 0, AXI_RESP_SLVERR
-        word = 0
-        for f in reg.fields:
-            if f.access == "wo":
-                continue  # write-only fields read as zero
-            word |= (self.value[(reg.name, f.name)] & ((1 << f.width) - 1)) << f.lsb
-        return word, AXI_RESP_OKAY
-
-    def field(self, reg_name: str, field_name: str) -> int:
-        return self.value[(reg_name, field_name)]
-
-
-# --------------------------------------------------------------------------- #
-# AXI transaction sequencer for the directed testbench
-# --------------------------------------------------------------------------- #
-
-
-class _Sequencer:
-    """Turns AXI transactions into ``TbSpec`` vectors and checks.
-
-    The per-transaction cycle arithmetic lives here once rather than in a
-    hand-written cycle table, because a hand-written table is where off-by-one
-    errors hide. Each method documents the handshake timing it assumes; those
-    assumptions come from the generator in ``regblock.py`` and are what the
-    Verilator run gate actually tests.
-    """
-
-    def __init__(self) -> None:
-        self.vectors: list[dict[str, int]] = []
-        self.checks: list[Check] = []
-        self.cycle = 0
-
-    def _drive(self, cycle: int, **signals: int) -> None:
-        while len(self.vectors) <= cycle:
-            self.vectors.append({})
-        self.vectors[cycle].update(signals)
-
-    def expect(self, cycle: int, signal: str, value: int) -> None:
-        self.checks.append(Check(cycle=cycle, signal=signal, expected=value))
-
-    def idle(self, cycles: int = 1) -> None:
-        self._drive(self.cycle + cycles - 1)
-        self.cycle += cycles
-
-    def write(
-        self,
-        addr: int,
-        data: int,
-        strb: int,
-        resp: int,
-        after: list[tuple[str, int]],
-    ) -> None:
-        """One write burst, issued from an idle bus.
-
-        Timing (from ``regblock.py``): both ``awready`` and ``wready`` are high
-        on an idle bus, so cycle ``c`` completes the AW and W handshakes at the
-        next edge. Cycle ``c+1`` holds both captured, which is when ``wr_exec``
-        is true, so the write lands and ``bvalid`` rises at the following edge.
-        Cycle ``c+2`` therefore observes the response *and* the updated field
-        outputs; ``bready`` was raised at ``c`` so ``bvalid`` clears by ``c+3``,
-        leaving the bus idle again.
-        """
-        c = self.cycle
-        self._drive(c, awaddr=addr, awvalid=1, wdata=data, wstrb=strb, wvalid=1, bready=1)
-        self._drive(c + 1, awvalid=0, wvalid=0)
-        self.expect(c + 2, "bvalid", 1)
-        self.expect(c + 2, "bresp", resp)
-        for port, value in after:
-            self.expect(c + 2, port, value)
-        self.expect(c + 3, "bvalid", 0)
-        self.cycle = c + 3
-
-    def read(
-        self,
-        addr: int,
-        data: int,
-        resp: int,
-        extra: dict[str, int] | None = None,
-    ) -> None:
-        """One read burst, issued from an idle bus.
-
-        ``arready`` is high whenever no read data is pending, so cycle ``c``
-        completes the AR handshake and the addressed word is captured at the
-        next edge; cycle ``c+1`` observes ``rvalid``/``rdata``/``rresp``.
-        ``extra`` drives hardware-face inputs in the same cycle as the address,
-        which is early enough for a read-only field to be sampled by that edge.
-        """
-        c = self.cycle
-        self._drive(c, araddr=addr, arvalid=1, rready=1, **(extra or {}))
-        self._drive(c + 1, arvalid=0)
-        self.expect(c + 1, "rvalid", 1)
-        self.expect(c + 1, "rdata", data)
-        self.expect(c + 1, "rresp", resp)
-        self.cycle = c + 2
-
-    def pulse_input(self, port: str, value: int, after: list[tuple[str, int]]) -> None:
-        """Drive a hardware input for one cycle and check what it produced.
-
-        Used for ``w1c`` set inputs: driven at cycle ``c``, applied by the edge
-        into ``c+1``, released there so the following edge cannot re-apply it.
-        """
-        c = self.cycle
-        self._drive(c, **{port: value})
-        self._drive(c + 1, **{port: 0})
-        for target, expected in after:
-            self.expect(c + 1, target, expected)
-        self.cycle = c + 2
-
-
-# --------------------------------------------------------------------------- #
 # Directed testbench recipe
 # --------------------------------------------------------------------------- #
 
@@ -522,8 +338,8 @@ def tb_spec(opts: AxilRegblockOptions) -> TbSpec:
     regmap = register_map(opts)
     dw = opts.data_width
     full_strb = (1 << (dw // 8)) - 1
-    model = _Model(regmap)
-    seq = _Sequencer()
+    model = RegisterModel(regmap)
+    seq = AxilSequencer()
 
     # Cycle 0: nothing driven — just assert the post-reset state. A target must
     # not be asserting a response out of reset, and must be ready to accept.
