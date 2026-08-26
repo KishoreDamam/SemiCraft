@@ -1,0 +1,28 @@
+// SemiCraft v0.3.0
+// Snippet: sync_ram (config hash: 8d9d7571c91c)
+// 1024 x 64-bit single-port synchronous RAM
+//
+// Generated code is provided as-is, without warranty of any kind. Free for
+// commercial and non-commercial use at the user's own risk.
+
+module sync_ram (
+    input  wire        clk,    // Clock; the only timing input
+    input  wire [9:0]  addr,   // Shared read/write address
+    input  wire        we,     // Write enable
+    input  wire [63:0] din,    // Write data
+    input  wire        re,     // Read enable; dout holds when low
+    output reg  [63:0] dout    // Registered read data, valid the next cycle
+);
+
+    reg [63:0] mem [0:1023];  // Storage array; never reset
+
+    always @(posedge clk) begin
+        if (we) begin
+            mem[addr] <= din;
+        end
+        if (re) begin
+            dout <= mem[addr];
+        end
+    end
+
+endmodule

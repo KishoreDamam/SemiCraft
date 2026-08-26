@@ -48,6 +48,7 @@ only together with a newer Verilator.
 
 from __future__ import annotations
 
+import re
 import textwrap
 
 from ..ir.nodes import Module
@@ -136,11 +137,12 @@ def generate_cocotb_tb(module_def, opts, rtl_module: Module) -> str:
     for chk in spec.checks:
         checks_by_cycle.setdefault(chk.cycle, []).append(chk)
 
-    out: list[str] = [*_banner(rtl_module), "", "import cocotb"]
-    out.append("from cocotb.clock import Clock")
-    out.append("from cocotb.triggers import FallingEdge, RisingEdge, Timer")
-    out.append("")
-    out.append("")
+    # The body is built first so the import line can be derived from what it
+    # actually uses. A fixed `FallingEdge, RisingEdge, Timer` was correct only
+    # while every module had a reset: `RisingEdge` appears solely in the
+    # reset-hold loop, so the first IP without a reset (P4-04's RAM) emitted an
+    # unused import. Ruff lints the committed cocotb goldens and caught it.
+    out: list[str] = []
     out.append(f'@cocotb.test(timeout_time={timeout_ns}, timeout_unit="ns")')
     out.append("async def smoke(dut):")
     out.append(f'{_INDENT}"""Directed smoke test for {rtl_module.name} (generated).')
@@ -216,4 +218,16 @@ def generate_cocotb_tb(module_def, opts, rtl_module: Module) -> str:
     # Same marker the sim runner greps for, so pass semantics are shared.
     out.append(f'{_INDENT}dut._log.info("SMOKE PASS: {rtl_module.name}")')
     out.append("")
-    return "\n".join(out)
+    triggers = sorted(
+        name
+        for name in ("FallingEdge", "RisingEdge", "Timer")
+        if any(re.search(rf"\b{name}\(", line) for line in out)
+    )
+    header = [*_banner(rtl_module), "", "import cocotb", "from cocotb.clock import Clock"]
+    if triggers:
+        header.append(f"from cocotb.triggers import {', '.join(triggers)}")
+    header.extend(("", ""))
+    # No trailing "\n" here: the body's last element is already an empty
+    # string, so the join supplies exactly one final newline. Adding another
+    # would rewrite every committed cocotb golden for no reason.
+    return "\n".join([*header, *out])

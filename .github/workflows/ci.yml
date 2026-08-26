@@ -106,6 +106,12 @@ jobs:
         # boundary flow control or ordering.
         run: uv run pytest backend/tests/ips/test_sync_fifo_run.py -v
 
+      - name: Run synchronous RAM gate (P4-04)
+        # Includes the write-first mutation: a RAM whose read-during-write
+        # returns new data is a different component, and nothing in the port
+        # list distinguishes the two.
+        run: uv run pytest backend/tests/ips/test_ram_run.py -v
+
       - name: Run golden TB run gate (P3-03a, enforcing)
         # Executes each module's defaults smoke TB (SEMICRAFT_TB_RUN_ALL=1
         # for the full matrix). Went enforcing after the first advisory run

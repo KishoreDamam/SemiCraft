@@ -247,9 +247,57 @@ removed, read index wrong, `full` stuck low, `empty` stuck low. A FIFO test
 that only pushes a few words and pops them back never touches the two things
 that actually make a FIFO correct — boundary flow control and ordering.
 
+## The synchronous RAM (P4-04)
+
+`sync-ram` is single-port or simple dual-port, over the same `Memory` node.
+Two decisions are worth knowing before you instantiate it:
+
+**It has no reset at all.** Storage must not be cleared — clearing a deep
+memory costs a great deal of logic for no observable behaviour — and resetting
+*only* the output register is what most often blocks block-RAM inference in
+FPGA synthesis. So the module has a bare clock, and its options extend
+`CommonOptions` rather than `ClockedOptions`. The consequence is real and
+documented: `dout` holds no defined value until the first completed read (X in
+a four-state simulator, zero in Verilator), and the generated testbench never
+checks it before one.
+
+**Read-during-write returns OLD data.** Both accesses are non-blocking
+assignments in one clocked process:
+
+```systemverilog
+if (we) mem[waddr] <= din;
+if (re) dout <= mem[raddr];
+```
+
+so reading the address being written in the same cycle yields what was already
+there — READ_FIRST. This is the one behaviour of a RAM that nothing in the
+port list reveals, so the testbench pins it with a directed check, and the run
+gate includes a **write-first mutation** that must fail. A generator that got
+this wrong would compile, lint clean, and pass any testbench that keeps writes
+and reads on separate cycles.
+
+Bundle layout follows the port mode: single-port is *one* bundle, because
+`addr` is shared and a port may belong to at most one bundle; simple dual-port
+splits into `wr` and `rd`.
+
 ## Current state
 
-`by_kind("ip")` ships `axil-regblock` and `sync-fifo`.
+`by_kind("ip")` ships `axil-regblock`, `sync-fifo` and `sync-ram`.
+
+**Deferred: ROM with defined contents.** P4-04 pairs the RAM with a ROM. A
+ROM is only useful if its contents are specified, and there is no way to
+express that today: the synthesizable IR has no memory-initialisation
+construct (`initial`/`$readmemh` live in the testbench node family, which the
+synthesizable validator rejects by design — TB_SPEC §1). The options form also
+has no widget for an array of integers, so contents cannot come from options
+either. A case-statement lookup works only for tiny depths.
+
+Two viable routes, both needing a recorded IR decision first: an additive
+`init_values` on `Memory` rendered as an `initial` block (FPGA-friendly, not
+ASIC-portable), or a generated `.hex` file plus `$readmemh` (portable, but
+`GeneratedFile.kind` is a frozen Literal and a data file is neither `rtl`,
+`tb`, nor `doc`). Picking between them is the first task of that work package,
+not something to settle in passing.
 
 **Deferred: the asynchronous (CDC) FIFO.** P4-03 pairs the sync FIFO with a
 gray-pointer async FIFO, which is not shipped here. The testbench framework

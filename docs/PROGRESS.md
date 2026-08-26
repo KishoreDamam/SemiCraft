@@ -210,7 +210,9 @@ file as an extra Verilator source.
 | P4-02 AXI4-Lite regblock | DONE | `ips/regblock.py`: `build_axil_regblock(name, regmap, ...)` — a plain function over **any** register map, so P4-05..08 splice it in as their bus frontend rather than subclassing a catalog entry. Single-outstanding target, independent AW/W capture, exact byte-strobe merge, registered reads, per-access-type field semantics. `ips/axil_regblock.py` is the first shipped IP (`axil-regblock`). 8 golden cases x 2 languages; every one lints `-Wall` clean, compiles and runs green |
 | P4-03a sync FIFO | DONE | `ips/sync_fifo.py`: power-of-two depth, wrap-bit pointers giving exact full/empty/count, registered reads, overflow/underflow ignored. **First consumer of the IR `Memory` node** (spec'd since IR v0.2, never emitted by any generator). Exercises the two `IpDef` branches the regblock could not: `register_map -> None`, and two bundles sharing one clock. 9 golden cases x 2 languages, all lint-clean, compiled and run |
 | P4-03b async FIFO | BLOCKED — see below | needs a two-clock testbench; a tied-clock TB would verify the FIFO logic and nothing about the CDC |
-| Next | **P4-04** (RAM/ROM — single clock, no register map, reuses the `Memory` node the FIFO just proved out); then P4-05..08 on top of the regblock. Also open: wire the cocotb path into `POST /api/v2/simulate` (SV-only today); add a frontend CI job (none exists — which is how a broken `npm ci` lockfile survived; note `npx tsc --noEmit` reports 10 pre-existing errors in *test* files, which `next build` does not typecheck); **v0.3.0 prepared but NOT tagged** (tag belongs on main after merge; CI does not run on this branch) | 2-agent budget per session |
+| P4-04a sync RAM | DONE | `ips/ram.py`: single-port and simple dual-port synchronous RAM. **No reset at all** (storage must not be cleared; resetting only the output register is what blocks block-RAM inference), so it extends `CommonOptions` not `ClockedOptions` and `TbSpec.reset is None`. Read-during-write returns OLD data (READ_FIRST), pinned by a directed check and by a write-first mutation in the run gate. 7 golden cases x 2 languages |
+| P4-04b ROM | BLOCKED — see below | needs memory initialisation, which the synthesizable IR does not express; two routes, both needing a recorded IR decision first |
+| Next | **P4-05..08** on top of the AXI register block (UART, SPI, I2C, timer + interrupt controller). The two blocked items (async FIFO, ROM) each need a recorded contract decision before they can start. Also open: wire the cocotb path into `POST /api/v2/simulate` (SV-only today); add a frontend CI job (none exists — which is how a broken `npm ci` lockfile survived; note `npx tsc --noEmit` reports 10 pre-existing errors in *test* files, which `next build` does not typecheck); **v0.3.0 prepared but NOT tagged** (tag belongs on main after merge; CI does not run on this branch) | 2-agent budget per session |
 
 ### P4-01: the contract is proven by a real IP, not by its own docstrings
 
@@ -384,3 +386,60 @@ guards neutered), read index taken from the write pointer, `full` stuck low,
 words and pops them back is easy to write and proves almost nothing — the two
 properties that matter are boundary flow control and ordering, and those are
 what the mutations target.
+
+### P4-04: the RAM, and the two decisions it forced
+
+**No reset.** Storage must not be cleared — a deep memory's reset costs real
+logic for no observable behaviour — and resetting *only* the output register is
+what most often blocks block-RAM inference. So the module has a bare clock and
+its options extend `CommonOptions`, not `ClockedOptions`: reset style and
+polarity would be options with nothing to configure. This is the first IP with
+`TbSpec.reset = None`, which `generate_tb` already handled but nothing had
+exercised.
+
+The consequence is honest rather than hidden: `dout` holds no defined value
+until the first completed read (X in a four-state simulator, **zero** in
+Verilator). A test asserts the generated testbench never checks `dout` before
+a read completes, because doing so would encode one simulator's
+initialisation convention as a requirement of the design.
+
+**Read-during-write returns OLD data.** Both accesses are non-blocking in one
+process, so a same-address read-during-write yields the previous contents
+(READ_FIRST). This is the one RAM behaviour nothing in the port list reveals,
+so it gets a directed check *and* a `write_first_bypass` mutation in the run
+gate — in both single and dual-port mode. A generator that got it wrong would
+compile, lint clean, and pass any testbench that keeps writes and reads on
+separate cycles.
+
+### ROM: blocked on a contract decision, not on effort
+
+P4-04 pairs the RAM with a ROM, which is not here. A ROM is only useful if its
+contents are specified, and nothing available today can express that:
+
+- The **synthesizable IR has no memory-initialisation construct**.
+  `initial`/`$readmemh` belong to the testbench node family, which the
+  synthesizable validator rejects by design (TB_SPEC §1 separation rule).
+- The **options form has no array-of-integers widget**, so contents cannot
+  come from options either (the same constraint that made the AXI register
+  block take counts rather than a user-authored map).
+- A **case-statement lookup** works only for tiny depths — a 1024-entry ROM
+  would emit 1024 case arms.
+
+Two viable routes, each needing a recorded decision before any code:
+
+1. An additive `init_values` on `Memory`, rendered as an `initial` block.
+   FPGA-friendly; not portable to ASIC flows.
+2. A generated `.hex` file plus `$readmemh`. Portable, but
+   `GeneratedFile.kind` is a frozen Literal (`rtl`/`tb`/`doc`) and a data file
+   is none of those — so it is a frozen-contract change as well.
+
+Choosing between them is the first task of that work package. Guessing now and
+discovering the constraint later is how a frozen contract gets edited silently.
+
+### A test bug worth recording
+
+`test_read_enable_can_be_omitted` asserted `"re" not in sv`. That is true of
+almost no generated file: the license banner contains "Free". Fixed with a
+whole-identifier regex helper, and the same helper now guards the `rst`/`addr`
+absence checks in that file — a bare substring test for a short identifier is
+close to worthless against generated text.
