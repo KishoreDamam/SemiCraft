@@ -166,6 +166,21 @@ jobs:
         # clock stretching ignored.
         run: uv run pytest backend/tests/ips/test_axil_i2c_run.py -v
 
+      - name: Run AXI4-Lite timer gate (P4-08)
+        # Mutations that all attack timing, because timing is all a timer
+        # does: a prescaler that is ignored, a terminal count one tick early,
+        # one-shot mode that silently reloads, and an interrupt that ignores
+        # its mask. Each expiry is checked from both sides so an early fire
+        # fails as loudly as a late one.
+        run: uv run pytest backend/tests/ips/test_axil_timer_run.py -v
+
+      - name: Run AXI4-Lite interrupt controller gate (P4-08)
+        # Mutations across the three things the controller decides: where the
+        # mask is applied (before the latch, or on the output), which value is
+        # trusted (the pin, the first flop, or the settled stage), and what
+        # counts as a request (edge or level, in both directions).
+        run: uv run pytest backend/tests/ips/test_axil_intc_run.py -v
+
       - name: Run golden TB run gate (P3-03a, enforcing)
         # Executes each module's defaults smoke TB (SEMICRAFT_TB_RUN_ALL=1
         # for the full matrix). Went enforcing after the first advisory run

@@ -217,7 +217,8 @@ file as an extra Verilator source.
 | P4-06 SPI master | DONE | `ips/axil_spi.py`: full-duplex 8-bit MSB-first master, all four CPOL/CPHA modes as generate-time options, programmable divider, manual chip select. CPHA=1 narrows the receive register to 7 bits (the last sample goes straight to RXDATA) — found by the `-Wall` gate. 8 golden cases x 2 languages |
 | frontend CI | DONE | the frontend had 172 tests, a build and an eslint config and **no CI job ran any of them** — the gap that let a broken `npm ci` lockfile survive. All four commands verified locally before wiring |
 | P4-07 I2C master | DONE | `ips/axil_i2c.py`: open-drain master (pull-down enables + sensed levels, no `inout`), START/STOP/byte primitives via CMD, ACK/NACK, **clock stretching** with the testbench stretching deliberately. Bus drivers are continuous functions of registered state, not FSM side effects. 7 golden cases x 2 languages |
-| Next | **P4-08 (timer + interrupt controller)** — the last protocol-free WP of Phase 4 — then P4-09..11 (per-IP verification scaffold, doc generator, release v0.4.0). The two blocked items (async FIFO, ROM) each need a recorded contract decision. Also open: wire the cocotb path into `POST /api/v2/simulate` (SV-only today); add a frontend CI job (none exists — which is how a broken `npm ci` lockfile survived; note `npx tsc --noEmit` reports 10 pre-existing errors in *test* files, which `next build` does not typecheck); **v0.3.0 prepared but NOT tagged** (tag belongs on main after merge; CI does not run on this branch) | 2-agent budget per session |
+| P4-08 timer + intc | DONE | `ips/axil_timer.py`: prescaled **down**-counter (zero test instead of a full-width comparator), one-shot or periodic, maskable level `irq`. One-shot stops via an internal `running` flop because `CTRL.enable` is an `rw` field only software can write. `ips/axil_intc.py`: `num_irq` sources, **mask on the output not on the latch** (a request masked at arrival must still be findable when software enables it later), edge or level trigger as a generate-time option, edge history taken *after* the synchroniser. 7 + 9 golden cases x 2 languages |
+| Next | **P4-09 (per-IP verification scaffold)** — where the P3-06 checker/monitor/scoreboard generators, compile-gated and ready since Phase 3, finally get attached to real IPs — then P4-10 (per-IP doc generator, wavedrom timing diagrams) and P4-11 (example instantiations + release v0.4.0). The two blocked items (async FIFO, ROM) each need a recorded contract decision. Also open: wire the cocotb path into `POST /api/v2/simulate` (SV-only today); the full suite is now ~50 min and grows with each IP — if it becomes the bottleneck, move the per-IP run gates to the nightly matrix and keep `defaults` in the main loop, the same trade already made for the TB matrix; **v0.3.0 prepared but NOT tagged** (tag belongs on main after merge; CI does not run on this branch) | 2-agent budget per session |
 
 ### P4-01: the contract is proven by a real IP, not by its own docstrings
 
@@ -599,3 +600,59 @@ SDA correctly on entry. As continuous functions of the registered state they
 change only just after a clock edge — no glitch risk — and each line's whole
 behaviour reads in one expression, which is what made `_expected_drive` in the
 testbench writable as an independent restatement rather than a copy.
+
+### P4-08: the timer and the interrupt controller, and what each mutation had to attack
+
+Two IPs, one work package, sharing nothing but the P4-05a composition. Both
+landed lint-clean and green on the first Verilator run — which is exactly when
+the mutation half stops being a formality and becomes the only evidence that
+the testbenches check anything.
+
+**Checking an expiry from one side proves nothing.** "`irq` high at cycle N"
+passes for any timer that fires *at or before* N, so a prescaler that is
+ignored outright, or a terminal count one tick early, would both pass. Each
+expiry is now checked from both sides — low on the cycle before the derived
+rise, high on it — and that pair is what `prescaler_ignored` and
+`terminal_off_by_one` fail against. `always_reload` fires at exactly the right
+moment and diverges only afterwards, so it needed a different check entirely:
+three idle periods after the one-shot expiry, with `COUNT` and `STATUS` both
+required to have stayed put.
+
+**A one-shot cannot stop itself through `CTRL.enable`.** That field is `rw` —
+the register block owns it and software alone writes it. Hardware stopping the
+counter needs its own state, which is what `running` is. Worth remembering for
+every future peripheral: the composition gives you the register's *value*, not
+a way to change it from the hardware side unless the field is `ro` or `w1c`.
+
+**Masking before the latch is the bug that looks like a simplification.** The
+interrupt controller latches every request regardless of `ENABLE` and masks
+only the output. Folding the mask into the latch is one fewer signal and loses
+precisely the request software wants to find when it enables a source later.
+The opening section of the sequence exists to catch it: a request is
+deliberately raised while everything is masked, and unmasking alone must raise
+`irq_out` with no new request.
+
+**A latency bug has no wrong value to catch it by.** Taking the request one
+flop earlier than the settled synchroniser stage changes nothing a simulator
+can see — simulation has no metastability — only *when* it happens. So the
+sequence reads `PENDING` on the exact cycle the last stage goes high and
+requires zero, then reads again two cycles later and requires the request.
+`synchroniser_bypassed` and `one_stage_short` both die on the first read. This
+is the same shape as the GPIO's `one_stage_short` from P4-05a, and it is now
+clear that it generalises: **for anything crossing a clock domain, pin the
+latency, because the value will look right either way.**
+
+**The edge history flop belongs after the synchroniser, not inside it.** With
+two stages the chain already holds a previous value in `irq_sync0`, and using
+it saves a flop. It is also one flop deep from an asynchronous pin, so feeding
+it into the edge comparison puts the metastability hazard back into the very
+latch the synchroniser protects. Cheap to get wrong; free to get right.
+
+**Edge and level are invisible to a pulse.** Every pulse earlier in the
+sequence latches identically under both modes, so the two swap mutations
+survive all of it. They are caught only by the final section, which holds a
+source asserted across a write-1-to-clear: level re-arms the flag on the same
+clock the write clears it, edge does not.
+
+Phase 4's exit criterion — "8+ IPs, each: both-language RTL, regblock-driven
+where applicable, datasheet, TB running in CI" — is met at nine.

@@ -463,10 +463,91 @@ same answer. Only reading a byte back exposed it — and the read transaction
 existed at that point only because a lint error (`rxdata` assigned but never
 used) pointed out that the docstring promised a read the testbench never did.
 
+## The AXI4-Lite timer (P4-08)
+
+`axil-timer` is a prescaled **down-counter**: `PRESCALE` divides the clock,
+`RELOAD` sets the period, `CTRL` runs it one-shot or periodically, and
+`STATUS.expired` (W1C) raises a maskable `irq`.
+
+**Why down, not up.** An up-counter compared against `RELOAD` needs a
+full-width comparator every clock; a down-counter needs only a zero test,
+which is a NOR of the counter bits. The software interface is identical, so
+the only visible cost is one documented off-by-one: the period is `RELOAD + 1`
+ticks, because the counter visits zero before expiring.
+
+**Disabling reloads, it does not pause.** While `CTRL.enable` is low the
+counter is continuously reloaded, so enabling always starts a full period, and
+`COUNT` means the same thing regardless of history. Pause-and-resume is a
+different device.
+
+**One-shot stops via `running`, not via `enable`.** `CTRL.enable` is an `rw`
+field the register block owns and software alone writes — hardware cannot
+clear it. A separate `running` flop is what makes a one-shot expiry stay
+expired.
+
+**The interrupt is two clocks behind the counter**, and that is composition
+cost, not sloppiness: one clock for the register block to sample the W1C set
+request, one for the flag to be readable. The testbench derives that latency
+from the RTL and the datasheet states it.
+
+### Checking an expiry from both sides
+
+A check for "`irq` high at cycle N" passes for any timer that fired *at or
+before* N — so a prescaler that is ignored entirely, or a reload value read one
+bit short, sails through. Every expiry here is therefore checked twice: `irq`
+low on the cycle before the derived rise, high on it. That pair is what gives
+the `prescaler_ignored` and `terminal_off_by_one` mutations something to fail
+against.
+
+`always_reload` is the odd one out — it fires at exactly the right moment and
+only diverges afterwards, so it is caught by the three idle periods that follow
+the one-shot expiry rather than by the expiry itself.
+
+## The AXI4-Lite interrupt controller (P4-08)
+
+`axil-intc` aggregates `num_irq` request lines into one masked output:
+`PENDING` (W1C) latches requests, `ENABLE` masks them, `STATUS` is
+`PENDING & ENABLE`, and `irq_out` is the OR of `STATUS`.
+
+**The mask gates the output, not the latch.** A request latches whether or not
+it is enabled. Masking before the latch would lose a request that arrived while
+masked — which is exactly the request software wants to find when it enables
+the source later.
+
+**Edge or level is a generate-time choice.** `trigger="level"` latches the
+level, so a write-1-to-clear has no lasting effect while the source is still
+asserted: the flag re-arms on the same clock the write clears it. That is
+correct level behaviour — a level source is deasserted by servicing the device,
+which the controller cannot do — and the testbench checks it rather than
+trusting the comment.
+
+**The edge history flop sits after the synchroniser.** It is tempting to take
+the previous value from the second-to-last synchroniser stage, which already
+holds one. That stage is one flop deep from an asynchronous input and can still
+be metastable, so feeding it into the comparison puts the hazard straight back
+into the latch the synchroniser exists to protect. `irq_hist` is a separate
+flop fed from the *last* stage.
+
+### Making a latency bug fail
+
+Taking the request one flop early does not change any *value* in simulation —
+simulation has no metastability — only the *latency*. So the sequence issues a
+read of `PENDING` on the exact cycle the last synchroniser stage goes high and
+requires it to read zero, and a second read two cycles later that requires the
+request. `synchroniser_bypassed` and `one_stage_short` both fail on the first
+read; without it, dropping the metastability guard on an asynchronous input
+would be invisible.
+
+The two trigger modes are caught differently again: every pulse earlier in the
+sequence latches identically under edge and level, so `level_instead_of_edge`
+and its inverse are caught only by the final section, which holds a source
+asserted across a write-1-to-clear.
+
 ## Current state
 
 `by_kind("ip")` ships `axil-regblock`, `sync-fifo`, `sync-ram`, `axil-gpio`,
-`axil-uart`, `axil-spi` and `axil-i2c`.
+`axil-uart`, `axil-spi`, `axil-i2c`, `axil-timer` and `axil-intc` — nine IPs,
+which clears the Phase-4 exit bar of eight.
 
 **Deferred: ROM with defined contents.** P4-04 pairs the RAM with a ROM. A
 ROM is only useful if its contents are specified, and there is no way to
