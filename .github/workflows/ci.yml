@@ -34,6 +34,33 @@ jobs:
       - name: Run pytest
         run: uv run pytest
 
+  frontend:
+    name: frontend (build + test + lint)
+    runs-on: ubuntu-latest
+    # Added at P4-06. The frontend had 172 tests, a production build and an
+    # eslint config, and *no* CI job ran any of them — which is how a broken
+    # `npm ci` lockfile once survived unnoticed. `npm ci` is deliberate rather
+    # than `npm install`: it fails on a lockfile that does not match
+    # package.json, which is exactly the failure this job exists to catch.
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm test -- --run
+      - name: Production build
+        run: npm run build
+
   lint-gate:
     name: golden lint + tb-compile gate (verilator)
     runs-on: ubuntu-latest
@@ -125,6 +152,12 @@ jobs:
         # bit edges instead of mid-bit, a bit period off by one, and rx_valid
         # never raised. A UART testbench passes far too easily without them.
         run: uv run pytest backend/tests/ips/test_axil_uart_run.py -v
+
+      - name: Run AXI4-Lite SPI gate (P4-06)
+        # All four clock modes, plus mutations that each leave a plausible
+        # waveform: LSB-first shifting, sampling on the wrong edge (mode N0
+        # behaving as N1), and a clock that never toggles.
+        run: uv run pytest backend/tests/ips/test_axil_spi_run.py -v
 
       - name: Run golden TB run gate (P3-03a, enforcing)
         # Executes each module's defaults smoke TB (SEMICRAFT_TB_RUN_ALL=1

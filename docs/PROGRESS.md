@@ -214,7 +214,9 @@ file as an extra Verilator source.
 | P4-04b ROM | BLOCKED — see below | needs memory initialisation, which the synthesizable IR does not express; two routes, both needing a recorded IR decision first |
 | P4-05a composition + GPIO | DONE | `build_axil_regblock(..., field_ports=False)` emits the hardware face as internal signals, so a peripheral splices the register block into its own module — one flat module, no submodule instantiation. Standalone goldens byte-identical. `AxilSequencer`/`RegisterModel` promoted into `regblock.py` so composed IPs share the AXI timing. First composed IP: `axil-gpio` (DIR/OUT/IN + input synchroniser). 7 golden cases x 2 languages |
 | P4-05b UART | DONE | `ips/axil_uart.py`: 8N1 UART, programmable baud divisor, TX/RX FSMs spliced onto the register block. Status flags are W1C (the block has no read-side effect); the transmit trigger is the register write strobe, delayed one cycle. 7 golden cases x 2 languages |
-| Next | **P4-06/07 (SPI, I2C)** and **P4-08 (timer + interrupt controller)**, all on the same composition. The two blocked items (async FIFO, ROM) each need a recorded contract decision before they can start. Also open: wire the cocotb path into `POST /api/v2/simulate` (SV-only today); add a frontend CI job (none exists — which is how a broken `npm ci` lockfile survived; note `npx tsc --noEmit` reports 10 pre-existing errors in *test* files, which `next build` does not typecheck); **v0.3.0 prepared but NOT tagged** (tag belongs on main after merge; CI does not run on this branch) | 2-agent budget per session |
+| P4-06 SPI master | DONE | `ips/axil_spi.py`: full-duplex 8-bit MSB-first master, all four CPOL/CPHA modes as generate-time options, programmable divider, manual chip select. CPHA=1 narrows the receive register to 7 bits (the last sample goes straight to RXDATA) — found by the `-Wall` gate. 8 golden cases x 2 languages |
+| frontend CI | DONE | the frontend had 172 tests, a build and an eslint config and **no CI job ran any of them** — the gap that let a broken `npm ci` lockfile survive. All four commands verified locally before wiring |
+| Next | **P4-07 (I2C)** and **P4-08 (timer + interrupt controller)**, on the same composition. The two blocked items (async FIFO, ROM) each need a recorded contract decision before they can start. Also open: wire the cocotb path into `POST /api/v2/simulate` (SV-only today); add a frontend CI job (none exists — which is how a broken `npm ci` lockfile survived; note `npx tsc --noEmit` reports 10 pre-existing errors in *test* files, which `next build` does not typecheck); **v0.3.0 prepared but NOT tagged** (tag belongs on main after merge; CI does not run on this branch) | 2-agent budget per session |
 
 ### P4-01: the contract is proven by a real IP, not by its own docstrings
 
@@ -522,3 +524,48 @@ were found only by trying to break the hardware on purpose.
 own is the second, and a `zip(..., strict=True)` over lists of different
 length. All three were assertions about output I had not looked at. Reading
 the generated RTL first would have avoided all of them.
+
+### P4-06: two timing lessons, both bought with a failing run
+
+**A flag set by peripheral logic is readable one cycle later than the event
+that set it.** The completing sclk edge raises the W1C *set request*; the
+register block latches it in its **own** always block, so the flag crosses a
+clock edge on the way to being readable. I collapsed "transfer done" and
+"status readable" into one cycle and every mode failed with
+`rdata expected 2, got 0`. This applies to every composed IP — the UART has the
+same structure and happened to have enough slack to hide it.
+
+**Check a level at the first cycle of a half period, not one cycle into it.**
+The original sclk check sat at `active + div + 1`, which is inside the first
+half period for any divisor above 1 and inside the *next* one at divisor 1. It
+passed everywhere except the fastest clock.
+
+The second fix is also a caution about fixing two things at once: correcting
+the sclk offset and moving the miso drive in the same edit turned 3 failures
+into 10, because the `+1` I removed was load-bearing for the *other* reason.
+Reading the failure values (`expected 2, got 0` — a status flag, not a clock
+level) is what separated them.
+
+### A mutation that ate itself
+
+`clock_never_toggles` was written as "call the real `_transfer_body` and drop
+the sclk assignment" — but it looked the function up through the module, which
+`monkeypatch` had just replaced with the mutation. It recursed until the
+interpreter gave up, and the traceback blamed the generator. The original is
+now captured at import time, with a comment saying why.
+
+### CPHA=1 needs a narrower receive register
+
+With CPHA=0 the last sample lands on edge 14, so all eight bits live in the
+shift register. With CPHA=1 the last sample *is* edge 15 and goes straight into
+RXDATA, so bit 7 of the register would be written and never read. The `-Wall`
+gate flagged it; the fix is a 7-bit register for that phase, which is smaller
+hardware as well as clean lint.
+
+### Frontend CI, finally
+
+I had flagged "no frontend CI job" in six consecutive handoffs without fixing
+it. It is now a real job — `npm ci`, lint, tests, production build — and all
+four commands were verified locally first. `npm ci` rather than `npm install`
+is deliberate: it fails on a lockfile that does not match `package.json`, which
+is the exact failure the job exists to catch.

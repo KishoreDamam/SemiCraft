@@ -381,10 +381,53 @@ obvious choices, `0xA5` and `0x3C`, are both **bit-palindromes**: an MSB-first
 transmitter would emit an identical frame and the checks would pass against
 reversed hardware. A test pins that the chosen byte is not a palindrome.
 
+## The AXI4-Lite SPI master (P4-06)
+
+`axil-spi` is a full-duplex 8-bit MSB-first master. Writing `TXDATA` performs
+one exchange — a byte out on `mosi` while a byte comes in on `miso`, because
+that is what SPI is; there is no separate read transfer.
+
+**Clock mode is a generate-time option**, not a register bit. A
+runtime-selectable mode carries both edge behaviours in hardware forever so a
+register can pick one at boot; SemiCraft generates the module a design needs.
+CPOL is a single inversion on the way out, so the FSM only ever knows one
+polarity — `sclk_int` idles low and leads with a rising edge in every mode.
+
+**Chip select is manual.** `CTRL.cs_assert` drives `cs_n` directly rather than
+the transfer pulsing it: multi-byte transactions need it held across several
+exchanges, and a master that deasserted between bytes could talk to neither a
+flash nor a sensor.
+
+**CPHA changes the receive register's width.** With CPHA=0 the last sample
+lands on edge 14 and the byte is complete before the final edge, so all eight
+bits live in the register. With CPHA=1 the last sample *is* the final edge and
+goes straight into RXDATA — only seven earlier bits are ever re-read, and an
+eighth would be written and never used. The `-Wall` gate refuses that, which
+is how the asymmetry got noticed rather than shipped as dead flops.
+
+### Two timing lessons from the testbench
+
+Both cost a failing run to learn, and both generalise:
+
+1. **A flag set by peripheral logic is readable one cycle later than the event
+   that set it.** The completing edge raises the W1C *set request*; the
+   register block latches it in its **own** always block, so the flag crosses a
+   clock edge on the way. Collapsing "transfer done" and "status readable" into
+   one cycle reads the flag still clear.
+2. **Check a level at the first cycle of a half period, not one cycle into
+   it.** With a divisor of 1 a half period is a single cycle, so "one cycle in"
+   lands in the *next* one — a check that passes at every other divisor and
+   fails only at the fastest.
+
+When a per-bit `miso` pattern cannot settle through the synchroniser inside one
+half period — a fast clock against a deep synchroniser — the testbench holds
+the line at a constant and expects the byte that produces, rather than claiming
+a resolution the configuration does not have. A test pins both branches.
+
 ## Current state
 
-`by_kind("ip")` ships `axil-regblock`, `sync-fifo`, `sync-ram`, `axil-gpio`
-and `axil-uart`.
+`by_kind("ip")` ships `axil-regblock`, `sync-fifo`, `sync-ram`, `axil-gpio`,
+`axil-uart` and `axil-spi`.
 
 **Deferred: ROM with defined contents.** P4-04 pairs the RAM with a ROM. A
 ROM is only useful if its contents are specified, and there is no way to
