@@ -424,10 +424,49 @@ half period — a fast clock against a deep synchroniser — the testbench holds
 the line at a constant and expects the byte that produces, rather than claiming
 a resolution the configuration does not have. A test pins both branches.
 
+## The AXI4-Lite I2C master (P4-07)
+
+`axil-i2c` runs the bus one **primitive at a time** through `CMD` —
+optionally a START, then one byte written or read, then optionally a STOP.
+That is how a real transaction is assembled, and it keeps the FSM small enough
+to reason about.
+
+**Open drain without `inout`.** I2C lines are never driven high: a device pulls
+low or releases. The module exposes only `scl_oe`/`sda_oe` (pull low) and
+`scl_in`/`sda_in` (sensed level), so a pad is `line = oe ? 1'b0 : 1'bz` and the
+wired-AND happens where it really happens — on the wire.
+
+**The bus drivers are continuous functions of registered state**, not
+assignments inside the FSM. An I2C bit is four quarter-phases, and writing
+"on entering phase 2, release SCL" as sequential code means every transition
+carries a bundle of side effects — which is where these state machines go
+wrong. As pure functions of registers they still change only just after a
+clock edge, and each line's behaviour reads in one place.
+
+**Clock stretching** is real: after releasing SCL the phase counter does not
+advance until `scl_in` actually reads high. The testbench stretches
+deliberately, and a mutation that ignores stretching must fail.
+
+### Two bugs worth recording
+
+**The quarter counter has to *hold* while stretched, not keep counting.** A
+free-running counter wraps all the way round before `q_cnt == div-1` comes true
+again, so the master would hang for 2¹⁶ cycles. Only reachable *with*
+stretching — which is why the testbench stretches rather than assuming a
+cooperative bus.
+
+**A guard named in a function's name is not a guard.** `_sample_at_phase2`
+sampled on *every* quarter, so a read shifted in four samples per bit. The
+write transaction passed anyway: its only sample is the ACK, and the slave
+holds SDA low across all four ACK quarters, so sampling four times gave the
+same answer. Only reading a byte back exposed it — and the read transaction
+existed at that point only because a lint error (`rxdata` assigned but never
+used) pointed out that the docstring promised a read the testbench never did.
+
 ## Current state
 
 `by_kind("ip")` ships `axil-regblock`, `sync-fifo`, `sync-ram`, `axil-gpio`,
-`axil-uart` and `axil-spi`.
+`axil-uart`, `axil-spi` and `axil-i2c`.
 
 **Deferred: ROM with defined contents.** P4-04 pairs the RAM with a ROM. A
 ROM is only useful if its contents are specified, and there is no way to

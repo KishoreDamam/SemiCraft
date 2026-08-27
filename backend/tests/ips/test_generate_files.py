@@ -147,6 +147,7 @@ def test_registry_routes_the_ip_to_kind_ip(registered_ip) -> None:
 #: earn its place.
 SHIPPED_IPS = [
     "axil-gpio",
+    "axil-i2c",
     "axil-regblock",
     "axil-spi",
     "axil-uart",

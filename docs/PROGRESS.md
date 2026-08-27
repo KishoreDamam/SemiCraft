@@ -216,7 +216,8 @@ file as an extra Verilator source.
 | P4-05b UART | DONE | `ips/axil_uart.py`: 8N1 UART, programmable baud divisor, TX/RX FSMs spliced onto the register block. Status flags are W1C (the block has no read-side effect); the transmit trigger is the register write strobe, delayed one cycle. 7 golden cases x 2 languages |
 | P4-06 SPI master | DONE | `ips/axil_spi.py`: full-duplex 8-bit MSB-first master, all four CPOL/CPHA modes as generate-time options, programmable divider, manual chip select. CPHA=1 narrows the receive register to 7 bits (the last sample goes straight to RXDATA) — found by the `-Wall` gate. 8 golden cases x 2 languages |
 | frontend CI | DONE | the frontend had 172 tests, a build and an eslint config and **no CI job ran any of them** — the gap that let a broken `npm ci` lockfile survive. All four commands verified locally before wiring |
-| Next | **P4-07 (I2C)** and **P4-08 (timer + interrupt controller)**, on the same composition. The two blocked items (async FIFO, ROM) each need a recorded contract decision before they can start. Also open: wire the cocotb path into `POST /api/v2/simulate` (SV-only today); add a frontend CI job (none exists — which is how a broken `npm ci` lockfile survived; note `npx tsc --noEmit` reports 10 pre-existing errors in *test* files, which `next build` does not typecheck); **v0.3.0 prepared but NOT tagged** (tag belongs on main after merge; CI does not run on this branch) | 2-agent budget per session |
+| P4-07 I2C master | DONE | `ips/axil_i2c.py`: open-drain master (pull-down enables + sensed levels, no `inout`), START/STOP/byte primitives via CMD, ACK/NACK, **clock stretching** with the testbench stretching deliberately. Bus drivers are continuous functions of registered state, not FSM side effects. 7 golden cases x 2 languages |
+| Next | **P4-08 (timer + interrupt controller)** — the last protocol-free WP of Phase 4 — then P4-09..11 (per-IP verification scaffold, doc generator, release v0.4.0). The two blocked items (async FIFO, ROM) each need a recorded contract decision. Also open: wire the cocotb path into `POST /api/v2/simulate` (SV-only today); add a frontend CI job (none exists — which is how a broken `npm ci` lockfile survived; note `npx tsc --noEmit` reports 10 pre-existing errors in *test* files, which `next build` does not typecheck); **v0.3.0 prepared but NOT tagged** (tag belongs on main after merge; CI does not run on this branch) | 2-agent budget per session |
 
 ### P4-01: the contract is proven by a real IP, not by its own docstrings
 
@@ -569,3 +570,32 @@ it. It is now a real job — `npm ci`, lint, tests, production build — and all
 four commands were verified locally first. `npm ci` rather than `npm install`
 is deliberate: it fails on a lockfile that does not match `package.json`, which
 is the exact failure the job exists to catch.
+
+### P4-07: two bugs, and how each was found
+
+**The quarter counter kept counting while the clock was stretched.** The stall
+branch incremented `q_cnt` unconditionally, so it would wrap all the way round
+before `q_cnt == div-1` came true again — a 2**16-cycle hang. Only reachable
+*with* stretching, which is exactly why the testbench stretches instead of
+assuming a cooperative bus. Found while writing the stretch into the
+testbench, before the first run.
+
+**A guard named in a function's name is not a guard.** `_sample_at_phase2`
+never checked the phase: it sampled on every quarter, so a read shifted in
+four samples per bit. The write transaction passed anyway — its only sample is
+the ACK, and the slave holds SDA low across all four ACK quarters, so sampling
+four times gave the same answer. It took reading a byte back to expose it.
+
+And the read transaction only existed because **ruff flagged `rxdata` as
+assigned but never used** — my own docstring said "write a byte, then read one
+back" while the testbench only ever wrote. The lint error was the thing that
+noticed the docstring was lying.
+
+### Why the bus drivers are combinational
+
+An I2C bit is four quarter-phases and there are five states, so the sequential
+form is twenty little bundles of side effects, each of which has to set SCL and
+SDA correctly on entry. As continuous functions of the registered state they
+change only just after a clock edge — no glitch risk — and each line's whole
+behaviour reads in one expression, which is what made `_expected_drive` in the
+testbench writable as an independent restatement rather than a copy.
