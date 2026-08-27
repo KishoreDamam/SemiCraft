@@ -119,6 +119,13 @@ jobs:
         # so the testbench has to be timed to catch it.
         run: uv run pytest backend/tests/ips/test_axil_gpio_run.py -v
 
+      - name: Run AXI4-Lite UART gate (P4-05b)
+        # Eight line rates and configurations, plus four mutations that each
+        # leave a *well-formed* frame behind: MSB-first shifting, sampling on
+        # bit edges instead of mid-bit, a bit period off by one, and rx_valid
+        # never raised. A UART testbench passes far too easily without them.
+        run: uv run pytest backend/tests/ips/test_axil_uart_run.py -v
+
       - name: Run golden TB run gate (P3-03a, enforcing)
         # Executes each module's defaults smoke TB (SEMICRAFT_TB_RUN_ALL=1
         # for the full matrix). Went enforcing after the first advisory run

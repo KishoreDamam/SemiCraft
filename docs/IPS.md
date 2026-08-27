@@ -337,9 +337,54 @@ written by feel.
 separate `gpio_oe` output and the integrator instantiates the tri-state
 buffer — which is also what lets the same RTL target FPGA and ASIC flows.
 
+## The AXI4-Lite UART (P4-05b)
+
+`axil-uart` is 8N1 — 8 data bits, no parity, one stop bit — with a
+programmable baud divisor, built on the same splice. Two design points are
+worth reading before you use it.
+
+**Status flags are write-1-to-clear, not read-to-clear.** The natural UART
+idiom is "reading RXDATA clears rx_valid", but the register block's read path
+is a mux with no per-register read strobe. Adding one would mean a new access
+type and a new signal on every register, for a single user. W1C is something
+the block already implements exactly, and it is a real UART interface in its
+own right: read RXDATA, then write a 1 to the flag.
+
+**The transmit trigger is the register's write strobe.** A write-only field's
+storage holds the byte but cannot say *when* it was written.
+`regblock.write_strobe_name("TXDATA")` names the signal that can — high for
+exactly one cycle per accepted write. The transmitter delays it by one cycle,
+because `txdata_data` only takes the new byte on the same edge the strobe is
+sampled; using it immediately would transmit the *previous* byte. That is a
+composition-wide lesson, not a UART one: a strobe and the value it refers to
+are not available in the same cycle.
+
+**Bit timing** is derived from the FSM and stated in the source: a write at
+cycle `c` starts the frame at `c+3`, and bit *k* occupies
+`[S + k*div, S + (k+1)*div - 1]`. The testbench checks the line one cycle into
+each bit period — away from both edges, so a half-period error shows up
+instead of landing on a boundary.
+
+### The mutations that matter here
+
+Every one of these leaves a **well-formed frame** behind, which is why a
+"drive a byte in, read a byte out" test is not enough:
+
+- *transmits MSB first* — still ten bits with a start and a stop.
+- *samples on bit edges* — the classic UART bug that works in a clean
+  testbench and fails on real wire.
+- *bit period off by one* — every bit one clock too long.
+- *rx_valid never set* — the byte arrives, nothing says so.
+
+The first of those is also why the test bytes are `0x4B` and `0x2D`. The
+obvious choices, `0xA5` and `0x3C`, are both **bit-palindromes**: an MSB-first
+transmitter would emit an identical frame and the checks would pass against
+reversed hardware. A test pins that the chosen byte is not a palindrome.
+
 ## Current state
 
-`by_kind("ip")` ships `axil-regblock`, `sync-fifo`, `sync-ram` and `axil-gpio`.
+`by_kind("ip")` ships `axil-regblock`, `sync-fifo`, `sync-ram`, `axil-gpio`
+and `axil-uart`.
 
 **Deferred: ROM with defined contents.** P4-04 pairs the RAM with a ROM. A
 ROM is only useful if its contents are specified, and there is no way to

@@ -213,7 +213,8 @@ file as an extra Verilator source.
 | P4-04a sync RAM | DONE | `ips/ram.py`: single-port and simple dual-port synchronous RAM. **No reset at all** (storage must not be cleared; resetting only the output register is what blocks block-RAM inference), so it extends `CommonOptions` not `ClockedOptions` and `TbSpec.reset is None`. Read-during-write returns OLD data (READ_FIRST), pinned by a directed check and by a write-first mutation in the run gate. 7 golden cases x 2 languages |
 | P4-04b ROM | BLOCKED — see below | needs memory initialisation, which the synthesizable IR does not express; two routes, both needing a recorded IR decision first |
 | P4-05a composition + GPIO | DONE | `build_axil_regblock(..., field_ports=False)` emits the hardware face as internal signals, so a peripheral splices the register block into its own module — one flat module, no submodule instantiation. Standalone goldens byte-identical. `AxilSequencer`/`RegisterModel` promoted into `regblock.py` so composed IPs share the AXI timing. First composed IP: `axil-gpio` (DIR/OUT/IN + input synchroniser). 7 golden cases x 2 languages |
-| Next | **P4-05b UART** on the composition proved above, then SPI/I2C/timer. The two blocked items (async FIFO, ROM) each need a recorded contract decision before they can start. Also open: wire the cocotb path into `POST /api/v2/simulate` (SV-only today); add a frontend CI job (none exists — which is how a broken `npm ci` lockfile survived; note `npx tsc --noEmit` reports 10 pre-existing errors in *test* files, which `next build` does not typecheck); **v0.3.0 prepared but NOT tagged** (tag belongs on main after merge; CI does not run on this branch) | 2-agent budget per session |
+| P4-05b UART | DONE | `ips/axil_uart.py`: 8N1 UART, programmable baud divisor, TX/RX FSMs spliced onto the register block. Status flags are W1C (the block has no read-side effect); the transmit trigger is the register write strobe, delayed one cycle. 7 golden cases x 2 languages |
+| Next | **P4-06/07 (SPI, I2C)** and **P4-08 (timer + interrupt controller)**, all on the same composition. The two blocked items (async FIFO, ROM) each need a recorded contract decision before they can start. Also open: wire the cocotb path into `POST /api/v2/simulate` (SV-only today); add a frontend CI job (none exists — which is how a broken `npm ci` lockfile survived; note `npx tsc --noEmit` reports 10 pre-existing errors in *test* files, which `next build` does not typecheck); **v0.3.0 prepared but NOT tagged** (tag belongs on main after merge; CI does not run on this branch) | 2-agent budget per session |
 
 ### P4-01: the contract is proven by a real IP, not by its own docstrings
 
@@ -482,3 +483,42 @@ Worth recording because a missing metastability guard is the classic defect
 that **never shows up in simulation**: the check has to be timed deliberately,
 and writing it by feel produced something that looked right and tested
 nothing.
+
+### P4-05b: the UART, and two things worth carrying forward
+
+**A strobe and its value are not available in the same cycle.** `TXDATA` is a
+write-only field: its storage holds the byte, but storage cannot say *when* a
+write happened. The register block already computes that —
+`write_strobe_name("TXDATA")` is high for exactly one cycle per accepted write
+— but `txdata_data` only takes the new byte on the same edge the strobe is
+sampled, so a transmitter triggered directly off the strobe would send the
+*previous* byte. The one-cycle delay is now documented as part of the
+composition contract, because every future peripheral with a command register
+hits it.
+
+**Read-to-clear was the obvious design and the wrong one.** The natural UART
+idiom is "reading RXDATA clears rx_valid", but the block's read path is a mux
+with no per-register read strobe. Adding one meant a new access type plus a
+signal on every register, for exactly one user. The flags are W1C instead —
+something the block already implements exactly, and a real UART interface in
+its own right. A contract stayed the size it was.
+
+### The test bytes were bit-palindromes
+
+The mutation gate includes "transmits MSB first", which leaves a perfectly
+well-formed frame behind. Writing it exposed that my chosen test bytes, `0xA5`
+and `0x3C`, both read the **same backwards** — a reversed transmitter would
+emit an identical frame and every check would pass. Changed to `0x4B`/`0x2D`,
+and a test now asserts the transmitted byte is not a palindrome.
+
+This is the same failure shape as the GPIO synchroniser check from P4-05a: a
+test that looks thorough, exercises the right signal, and cannot fail. Both
+were found only by trying to break the hardware on purpose.
+
+### Three test bugs of mine, all from guessing at the RTL
+
+`2'b00:` (the renderer emits minimal-width constants, `2'b0:`), slicing the
+*first* `if (!areset_n)` block when the UART has two clocked processes and its
+own is the second, and a `zip(..., strict=True)` over lists of different
+length. All three were assertions about output I had not looked at. Reading
+the generated RTL first would have avoided all of them.

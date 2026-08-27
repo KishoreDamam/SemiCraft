@@ -151,6 +151,7 @@ __all__ = [
     "AXI_RESP_SLVERR",
     "AXI_CLOCK",
     "AXI_RESET",
+    "write_strobe_name",
     "RegisterModel",
     "AxilSequencer",
 ]
@@ -267,6 +268,25 @@ def write_reserved_mask(reg: Register, data_width: int) -> int:
 
 def _wr_sel_name(reg: Register) -> str:
     return f"wr_sel_{reg.name.lower()}"
+
+
+def write_strobe_name(register_name: str) -> str:
+    """Name of the one-cycle "this register was written" signal.
+
+    Part of the composition contract (``field_ports=False``): a spliced
+    peripheral often needs the *event* of a write, not just the value — a
+    transmit register starts a transmission, a command register fires a pulse.
+    That signal already exists as the register's field write-enable, so a
+    composer reads it rather than re-deriving the decode.
+
+    High for exactly one cycle per accepted write: it is gated by ``wr_exec``,
+    which is true only while both write channels are captured and no response
+    is outstanding, and the response goes out on the very next edge.
+
+    Only registers with at least one writable field have one — a read-only
+    register never declares a strobe nobody would read.
+    """
+    return f"wr_sel_{register_name.lower()}"
 
 
 # --------------------------------------------------------------------------- #
