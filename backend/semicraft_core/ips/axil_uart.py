@@ -106,6 +106,7 @@ from .regblock import (
     write_strobe_name,
 )
 from .regmap import Register, RegisterField, RegisterMap
+from .verification import VerificationSpec, axil_verification
 
 _MODULE_NAME = "axil_uart"
 _DATA_WIDTH = 32
@@ -845,6 +846,16 @@ def explain(opts: AxilUartOptions) -> ExplanationDoc:
     )
 
 
+def verification_spec(opts: AxilUartOptions) -> VerificationSpec:  # noqa: ARG001
+    """The shared AXI4-Lite monitor + liveness/stability checker.
+
+    Every AXI IP splices in the same register-block frontend, so they all have
+    the same bus face and the same bus properties; the scaffold is written once
+    in ``ips/verification.py`` rather than seven times here.
+    """
+    return axil_verification(_MODULE_NAME)
+
+
 @dataclass(frozen=True)
 class _AxilUartIp:
     """Satisfies :class:`~.contract.IpDef` structurally."""
@@ -878,6 +889,9 @@ class _AxilUartIp:
     def bundles(self, opts: AxilUartOptions) -> list[PortBundle]:
         return bundles(opts)
 
+    def verification_spec(self, opts: AxilUartOptions) -> VerificationSpec:
+        return verification_spec(opts)
+
 
 IP = _AxilUartIp()
 
@@ -889,5 +903,6 @@ __all__ = [
     "tb_spec",
     "register_map",
     "bundles",
+    "verification_spec",
     "IP",
 ]

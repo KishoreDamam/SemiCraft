@@ -218,7 +218,8 @@ file as an extra Verilator source.
 | frontend CI | DONE | the frontend had 172 tests, a build and an eslint config and **no CI job ran any of them** — the gap that let a broken `npm ci` lockfile survive. All four commands verified locally before wiring |
 | P4-07 I2C master | DONE | `ips/axil_i2c.py`: open-drain master (pull-down enables + sensed levels, no `inout`), START/STOP/byte primitives via CMD, ACK/NACK, **clock stretching** with the testbench stretching deliberately. Bus drivers are continuous functions of registered state, not FSM side effects. 7 golden cases x 2 languages |
 | P4-08 timer + intc | DONE | `ips/axil_timer.py`: prescaled **down**-counter (zero test instead of a full-width comparator), one-shot or periodic, maskable level `irq`. One-shot stops via an internal `running` flop because `CTRL.enable` is an `rw` field only software can write. `ips/axil_intc.py`: `num_irq` sources, **mask on the output not on the latch** (a request masked at arrival must still be findable when software enables it later), edge or level trigger as a generate-time option, edge history taken *after* the synchroniser. 7 + 9 golden cases x 2 languages |
-| Next | **P4-09 (per-IP verification scaffold)** — where the P3-06 checker/monitor/scoreboard generators, compile-gated and ready since Phase 3, finally get attached to real IPs — then P4-10 (per-IP doc generator, wavedrom timing diagrams) and P4-11 (example instantiations + release v0.4.0). The two blocked items (async FIFO, ROM) each need a recorded contract decision. Also open: wire the cocotb path into `POST /api/v2/simulate` (SV-only today); the full suite is now ~50 min and grows with each IP — if it becomes the bottleneck, move the per-IP run gates to the nightly matrix and keep `defaults` in the main loop, the same trade already made for the TB matrix; **v0.3.0 prepared but NOT tagged** (tag belongs on main after merge; CI does not run on this branch) | 2-agent budget per session |
+| P4-09 verification scaffold | DONE | The P3-06 monitor/checker generators, unattached since Phase 3, bound to all nine IPs. `checkers/bind.py` emits SystemVerilog **`bind`**, so no TB_SPEC / `TbModule` / `render_tb` change was needed and the generated testbench is byte-identical with or without a scaffold. `checkers/restyle.py` maps canonical names through the render name map (`areset` -> `areset_n` at the *default* configuration). New `tb`-kind file `<module>_checks.sv`, SV only. Checks liveness + read-data stability for the seven AXI IPs; read-hold for `sync-fifo`/`sync-ram` - deliberately not the reset values the SVA already covers. 58 new goldens |
+| Next | **P4-10 (per-IP documentation generator)** — md datasheet from metadata with wavedrom timing diagrams — then P4-11 (example instantiations + release v0.4.0). Also open, and now concrete: the **scoreboard family is still unused** — the FIFO is where it belongs (data out must equal data in, in order), and `sync-fifo`/`sync-ram` are the two IPs with no scaffold. The two blocked items (async FIFO, ROM) each need a recorded contract decision. Also: wire the cocotb path into `POST /api/v2/simulate` (SV-only today); the full suite is ~55 min and grows with each IP — if it becomes the bottleneck, move the per-IP run gates to the nightly matrix and keep `defaults` in the main loop, the same trade already made for the TB matrix; **v0.3.0 prepared but NOT tagged** | 2-agent budget per session |
 
 ### P4-01: the contract is proven by a real IP, not by its own docstrings
 
@@ -656,3 +657,84 @@ clock the write clears it, edge does not.
 
 Phase 4's exit criterion — "8+ IPs, each: both-language RTL, regblock-driven
 where applicable, datasheet, TB running in CI" — is met at nine.
+
+### P4-09: the generators were fine; nothing was attached to anything
+
+P3-06 shipped a monitor/checker/scoreboard generator, compile-gated, with its
+own docs, and closed with "Not wired into `generate_files` — like P3-05, this
+lands standalone." It stayed standalone through the whole of Phase 4: nine IPs
+were built past it without a single one using it. That is the project's
+recurring failure mode in its purest form — an artifact that exists, passes its
+own tests, and verifies nothing — and it survived this long precisely because
+every test it had was green.
+
+**`bind` is what made attaching it cheap.** The obvious route was to
+instantiate scaffolds from the generated testbench, which means a new child
+node on `TbModule`, a `TbSpec` field, validator and renderer changes, and a
+frozen-contract decision — all so a checker could see nets the DUT already
+exposes. SystemVerilog `bind` needs none of it: the statement sits in the
+scaffold's own file and resolves in the DUT's scope. The generated testbench is
+byte-identical with or without a scaffold. Two hours of contract work replaced
+by a language feature that already exists for exactly this.
+
+Worth remembering as a general move: **when wiring something in looks like it
+needs a contract change, check whether the target language already has the
+seam.**
+
+**The fact the whole design rests on, measured rather than assumed.** Verilator
+turns `$error` into an implicit `$stop` and aborts with exit 134. Had it merely
+printed and continued, the testbench would still have reported SMOKE PASS and
+every checker in the file would have been decoration — a second layer of the
+same bug being fixed. That was checked with a six-line experiment *before* any
+of the scaffold was designed, not after it was written.
+
+**The mutation that proves the scaffold adds power, and the one that does
+not.** `rdata_churns` corrupts `rdata` only on cycles no directed read samples:
+the read still returns the right word at the cycle the testbench looks, and
+inverts every cycle after. Run twice on the same broken DUT — the testbench
+passes, the scaffold fails. That *pair* is the evidence; a mutation failing
+both ways would only show the testbench works.
+
+The liveness mutations do not clear that bar, and the first attempt at them was
+wrong. Breaking the write-response path fails the directed check at cycle 3,
+which aborts the run long before the 16-cycle latency counter expires — so the
+gate was asserting the checker's message on a run the checker never reached.
+The honest conclusion is that on SemiCraft's own directed sequences, which
+check the response cycle of *every* transaction, the liveness check adds
+nothing to the smoke gate; its value is in the file a user reuses in a more
+sparsely checked bench. Recording that is better than quietly deleting the
+check or, worse, weakening the assertion until it passed. To show it works at
+all, the gate now silences the testbench's own `$fatal` calls first, so the
+scaffold is the only thing left in the compile that can stop the run.
+
+**The restyling trap, caught by remembering P3-05a rather than by a failure.**
+An IP's `verification_spec(opts)` never sees the render style. AXI4-Lite fixes
+its reset active-low and `build_name_map` appends `_n`, so a spec naming
+`areset` would bind against a net rendered `areset_n` — broken at the
+**default** configuration, not merely under a custom naming convention. That is
+the exact bug P3-05a found in the assertion path. `checkers/restyle.py` closes
+it, the run gate carries a naming-style axis so it stays closed, and
+`check_spec_is_restylable` refuses to ship a catalog spec whose opaque fields
+would survive restyling unchanged — making the documented limitation
+unreachable by accident instead of merely written down.
+
+**A width bug the run gate found thirteen minutes in, and the test that now
+finds it in a tenth of a second.** `axil_verification` defaults to a 32-bit
+`rdata`; every composed peripheral fixes its data width at 32 and takes the
+default; `axil-regblock` is the one IP where the width is an option, and it was
+wired up without passing it through. A 32-bit scaffold port bound to a 64-bit
+net does not compile — and the only thing that noticed was one Verilator case
+deep inside a 13-minute gate. Widths are *structural*: a test that walks every
+scaffold port against the DUT's own port table needs no simulator and covers
+thirteen option cases in 0.12s. It was written by first confirming it fails
+against the original bug.
+
+**Still unused: the scoreboard.** No scaffold here has one, and the reason is
+worth stating rather than papering over. An expected-value scoreboard needs a
+model of what the next value should be; for a register block that model is
+`RegisterModel`, which lives in Python and drives the testbench. There is
+nothing in the DUT's scope to compare against, and pushing a hardware-derived
+"expected" value would only compare the design against itself. A scoreboard
+belongs where ordering *is* the property — a FIFO — which is now recorded as
+the next place to use it. One third of P3-06 therefore remains unattached, and
+saying so is more useful than shipping a scoreboard that cannot fail.

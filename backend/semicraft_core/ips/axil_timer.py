@@ -94,6 +94,7 @@ from .regblock import (
     build_axil_regblock,
 )
 from .regmap import Register, RegisterField, RegisterMap
+from .verification import VerificationSpec, axil_verification
 
 _MODULE_NAME = "axil_timer"
 _DATA_WIDTH = 32
@@ -687,6 +688,16 @@ def explain(opts: AxilTimerOptions) -> ExplanationDoc:
     )
 
 
+def verification_spec(opts: AxilTimerOptions) -> VerificationSpec:  # noqa: ARG001
+    """The shared AXI4-Lite monitor + liveness/stability checker.
+
+    Every AXI IP splices in the same register-block frontend, so they all have
+    the same bus face and the same bus properties; the scaffold is written once
+    in ``ips/verification.py`` rather than seven times here.
+    """
+    return axil_verification(_MODULE_NAME)
+
+
 @dataclass(frozen=True)
 class _AxilTimerIp:
     """Satisfies :class:`~.contract.IpDef` structurally."""
@@ -720,6 +731,9 @@ class _AxilTimerIp:
     def bundles(self, opts: AxilTimerOptions) -> list[PortBundle]:
         return bundles(opts)
 
+    def verification_spec(self, opts: AxilTimerOptions) -> VerificationSpec:
+        return verification_spec(opts)
+
 
 IP = _AxilTimerIp()
 
@@ -731,5 +745,6 @@ __all__ = [
     "tb_spec",
     "register_map",
     "bundles",
+    "verification_spec",
     "IP",
 ]

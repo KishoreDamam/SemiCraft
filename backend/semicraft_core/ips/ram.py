@@ -69,6 +69,7 @@ from ..snippets.contract import CommonOptions, ExplanationDoc, SignalDoc
 from ..version import VERSION
 from .bundles import BundlePort, PortBundle
 from .regmap import RegisterMap
+from .verification import VerificationSpec, read_port_verification
 
 _MODULE_NAME = "sync_ram"
 
@@ -515,6 +516,25 @@ def explain(opts: RamOptions) -> ExplanationDoc:
     )
 
 
+def verification_spec(opts: RamOptions) -> VerificationSpec:
+    """Read-hold checker, but only when there is an enable to hold against.
+
+    With ``read_enable=False`` the read register has no gate — ``dout`` follows
+    the address every cycle, by design — so there is no hold property to check
+    and the IP returns an empty spec. An empty spec emits no file, which is the
+    right answer: a scaffold that checked nothing would be worse than none.
+    """
+    if not opts.read_enable:
+        return VerificationSpec()
+    return read_port_verification(
+        _MODULE_NAME,
+        clock="clk",
+        data="dout",
+        enable="re",
+        data_width=opts.width,
+    )
+
+
 @dataclass(frozen=True)
 class _RamIp:
     """Satisfies :class:`~.contract.IpDef` structurally."""
@@ -541,6 +561,9 @@ class _RamIp:
     def tb_spec(self, opts: RamOptions) -> TbSpec:
         return tb_spec(opts)
 
+    def verification_spec(self, opts: RamOptions) -> VerificationSpec:
+        return verification_spec(opts)
+
     def register_map(self, opts: RamOptions) -> RegisterMap | None:
         return register_map(opts)
 
@@ -556,6 +579,7 @@ __all__ = [
     "explain",
     "port_groups",
     "tb_spec",
+    "verification_spec",
     "register_map",
     "bundles",
     "IP",

@@ -95,6 +95,7 @@ from .regblock import (
     write_strobe_name,
 )
 from .regmap import Register, RegisterField, RegisterMap
+from .verification import VerificationSpec, axil_verification
 
 _MODULE_NAME = "axil_i2c"
 _DATA_WIDTH = 32
@@ -989,6 +990,16 @@ def explain(opts: AxilI2cOptions) -> ExplanationDoc:
     )
 
 
+def verification_spec(opts: AxilI2cOptions) -> VerificationSpec:  # noqa: ARG001
+    """The shared AXI4-Lite monitor + liveness/stability checker.
+
+    Every AXI IP splices in the same register-block frontend, so they all have
+    the same bus face and the same bus properties; the scaffold is written once
+    in ``ips/verification.py`` rather than seven times here.
+    """
+    return axil_verification(_MODULE_NAME)
+
+
 @dataclass(frozen=True)
 class _AxilI2cIp:
     """Satisfies :class:`~.contract.IpDef` structurally."""
@@ -1021,6 +1032,9 @@ class _AxilI2cIp:
 
     def bundles(self, opts: AxilI2cOptions) -> list[PortBundle]:
         return bundles(opts)
+
+    def verification_spec(self, opts: AxilI2cOptions) -> VerificationSpec:
+        return verification_spec(opts)
 
 
 IP = _AxilI2cIp()

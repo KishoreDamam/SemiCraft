@@ -40,7 +40,7 @@ _SKIP_MODULES = {"contract", "registry"}
 # modules alongside its catalog items. They are listed here rather than added
 # to _SKIP_MODULES so that a *snippet* called ``doc.py`` would still be
 # discovered — the skip list is per package, not global.
-_IP_SKIP_MODULES = _SKIP_MODULES | {"regmap", "bundles", "doc"}
+_IP_SKIP_MODULES = _SKIP_MODULES | {"regmap", "bundles", "doc", "verification"}
 
 # Taxonomy defaults (Appendix A.2). Read via getattr so pre-taxonomy snippet
 # files that declare neither field are treated as stable snippets.

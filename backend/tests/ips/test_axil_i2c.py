@@ -245,7 +245,9 @@ def test_i2c_bus_is_its_own_bundle() -> None:
 
 def test_generates_the_full_ip_file_set() -> None:
     res = generate_files("axil-i2c", {})
-    assert [f.kind for f in res.files] == ["rtl", "doc", "tb", "tb", "doc"]
+    assert [f.kind for f in res.files] == ["rtl", "doc", "tb", "tb", "tb", "doc"]
+    # rtl, datasheet, SV TB, cocotb TB, verification scaffold, test plan.
+    assert [f.path for f in res.files if f.kind == "tb"][-1].endswith("_checks.sv")
     doc = next(f.text for f in res.files if f.kind == "doc")
     assert "`CMD`" in doc and "`CLKDIV`" in doc
     assert set(axil_ports()) <= set(doc.split())  or "awvalid" in doc

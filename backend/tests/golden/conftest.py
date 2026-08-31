@@ -108,6 +108,22 @@ class GoldenCase:
         )
 
     @property
+    def checks_snapshot_path(self) -> Path:
+        """Golden path for the verification scaffold (P4-09), a ``tb``-kind file.
+
+        Only IPs emit one, and only for an ``sv`` build (``bind`` has no
+        Verilog-2001 equivalent), so this snapshot is skipped rather than
+        failed where there is no file. Kept as a real ``.sv`` file for the same
+        reason as :attr:`tb_snapshot_path`: a compile gate can glob it and hand
+        it straight to Verilator.
+        """
+        return (
+            GOLDEN_ROOT
+            / self.snippet_id
+            / f"{self.case_name}.{_extension(self.language)}_checks.sv"
+        )
+
+    @property
     def resolved_options(self) -> dict:
         """Options dict with ``language`` pinned to this case's resolved language."""
         return {**self.options, "language": self.language}

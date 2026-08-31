@@ -52,6 +52,7 @@ from ..assertions.spec import (
     ResetContext,
     ResetKnownValue,
 )
+from ..checkers.spec import ResetPolarity
 from ..ir.build import IN, OUT, bit, mem, vec
 from ..ir.nodes import (
     AlwaysFF,
@@ -82,6 +83,7 @@ from ..snippets.contract import ClockedOptions, ExplanationDoc, SignalDoc
 from ..version import VERSION
 from .bundles import BundlePort, PortBundle
 from .regmap import RegisterMap
+from .verification import VerificationSpec, read_port_verification
 
 _MODULE_NAME = "sync_fifo"
 
@@ -621,6 +623,20 @@ def explain(opts: SyncFifoOptions) -> ExplanationDoc:
     )
 
 
+def verification_spec(opts: SyncFifoOptions) -> VerificationSpec:
+    """Read-hold checker: `rd_data` must not move while `rd_en` is low."""
+    return read_port_verification(
+        _MODULE_NAME,
+        clock="clk",
+        data="rd_data",
+        enable="rd_en",
+        data_width=opts.width,
+        reset=ResetPolarity(
+            signal="rst", active_low=opts.reset_polarity == "active_low"
+        ),
+    )
+
+
 @dataclass(frozen=True)
 class _SyncFifoIp:
     """Satisfies :class:`~.contract.IpDef` structurally."""
@@ -647,6 +663,9 @@ class _SyncFifoIp:
     def tb_spec(self, opts: SyncFifoOptions) -> TbSpec:
         return tb_spec(opts)
 
+    def verification_spec(self, opts: SyncFifoOptions) -> VerificationSpec:
+        return verification_spec(opts)
+
     def register_map(self, opts: SyncFifoOptions) -> RegisterMap | None:
         return register_map(opts)
 
@@ -662,6 +681,7 @@ __all__ = [
     "explain",
     "port_groups",
     "tb_spec",
+    "verification_spec",
     "register_map",
     "bundles",
     "IP",

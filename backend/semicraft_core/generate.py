@@ -50,6 +50,7 @@ __all__ = [
     "generate_files",
     "EMIT_TB",
     "EMIT_COCOTB_TB",
+    "EMIT_CHECKS",
 ]
 
 # Smoke-TB emission is feature-flagged OFF until P2-13 lands the TB generator
@@ -64,6 +65,13 @@ EMIT_TB = True
 # testbench remains the supported default and the one every golden gate runs;
 # the emitted Python says so in its own banner. Set False to omit the file.
 EMIT_COCOTB_TB = True
+
+# Verification-scaffold emission (P4-09). Enabled: the scaffolds are attached
+# with SystemVerilog `bind` and proven able to *fail* a broken DUT by the
+# mutation half of backend/tests/ips/test_verification_run.py. SV only - `bind`
+# is not Verilog-2001 - so a Verilog build silently gets no scaffold file.
+# Set False to omit the file.
+EMIT_CHECKS = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -407,6 +415,35 @@ def generate_files(item_id: str, options: dict) -> GenerateFilesResult:
                             text=cocotb_text,
                         )
                     )
+
+        # Verification scaffolds (P4-09): monitor + procedural checker modules
+        # plus the SystemVerilog `bind` statements that attach them inside the
+        # DUT. `kind="tb"` for the same reason the cocotb file is - the Literal
+        # is a frozen contract (plan Appendix A.1) - and the path distinguishes
+        # it, exactly as the datasheet/test-plan split does for two `doc` files.
+        #
+        # SV only: `bind` has no Verilog-2001 equivalent. Emitting a file that
+        # cannot compile under the language the user asked for would be worse
+        # than emitting nothing, and the checks are simulation artifacts, so a
+        # Verilog RTL build loses nothing it could have used.
+        if EMIT_CHECKS and language == "sv" and hasattr(item, "verification_spec"):
+            from .ips.verification import render_verification, verification_filename
+            from .render.style import build_name_map
+
+            names = build_name_map(rtl_module, _style_from_options(opts))
+            checks_text = render_verification(
+                item.verification_spec(opts),
+                rtl_module.name,
+                lambda canonical: names.get(canonical, canonical),
+            )
+            if checks_text:
+                files.append(
+                    GeneratedFile(
+                        path=verification_filename(rtl_module.name),
+                        kind="tb",
+                        text=checks_text,
+                    )
+                )
 
         # Test-plan document (P3-07): a second `doc`-kind file appended after
         # the datasheet, derived entirely from ExplanationDoc/port_groups/

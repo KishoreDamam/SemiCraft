@@ -56,6 +56,7 @@ from .regblock import (
     write_reserved_mask,
 )
 from .regmap import Register, RegisterField, RegisterMap
+from .verification import VerificationSpec, axil_verification
 
 _MODULE_NAME = "axil_regblock"
 
@@ -639,6 +640,21 @@ def explain(opts: AxilRegblockOptions) -> ExplanationDoc:
 # --------------------------------------------------------------------------- #
 
 
+def verification_spec(opts: AxilRegblockOptions) -> VerificationSpec:
+    """The shared AXI4-Lite monitor + liveness/stability checker.
+
+    Every AXI IP splices in the same register-block frontend, so they all have
+    the same bus face and the same bus properties; the scaffold is written once
+    in ``ips/verification.py`` rather than eight times across the catalog.
+
+    This is the one IP whose data width is configurable, so it is also the one
+    that has to pass it through: the scaffold declares ``rdata`` as a port, and
+    a 32-bit port bound to a 64-bit net does not compile. The composed
+    peripherals all fix the width at 32 and take the default.
+    """
+    return axil_verification(_MODULE_NAME, data_width=opts.data_width)
+
+
 @dataclass(frozen=True)
 class _AxilRegblockIp:
     """Satisfies :class:`~.contract.IpDef` structurally."""
@@ -672,6 +688,9 @@ class _AxilRegblockIp:
     def bundles(self, opts: AxilRegblockOptions) -> list[PortBundle]:
         return bundles(opts)
 
+    def verification_spec(self, opts: AxilRegblockOptions) -> VerificationSpec:
+        return verification_spec(opts)
+
 
 IP = _AxilRegblockIp()
 
@@ -683,5 +702,6 @@ __all__ = [
     "tb_spec",
     "register_map",
     "bundles",
+    "verification_spec",
     "IP",
 ]

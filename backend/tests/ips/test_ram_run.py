@@ -41,7 +41,18 @@ def _run(tmp_path: Path, options: dict) -> SimResult:
     tb_path = tmp_path / tb.path
     rtl_path.write_text(rtl.text, encoding="utf-8")
     tb_path.write_text(tb.text, encoding="utf-8")
-    return run_smoke(tb_path, [rtl_path])
+
+    # The P4-09 verification scaffold, compiled in alongside the DUT. It binds
+    # itself, so nothing else here changes - but every option case below now
+    # runs the read-hold check too. Absent for a Verilog build (`bind` is
+    # SV-only) and for a RAM with no read enable (nothing to hold against).
+    sources = [rtl_path]
+    checks = next((f for f in res.files if f.path.endswith("_checks.sv")), None)
+    if checks is not None:
+        checks_path = tmp_path / checks.path
+        checks_path.write_text(checks.text, encoding="utf-8")
+        sources.append(checks_path)
+    return run_smoke(tb_path, sources)
 
 
 @pytest.mark.skipif(not _HAS_VERILATOR, reason="verilator not installed on this host")

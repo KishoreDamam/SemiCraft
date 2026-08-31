@@ -181,6 +181,16 @@ jobs:
         # counts as a request (edge or level, in both directions).
         run: uv run pytest backend/tests/ips/test_axil_intc_run.py -v
 
+      - name: Run bound verification-scaffold gate (P4-09)
+        # The P3-06 monitor/checker generators, finally attached to real IPs
+        # with SystemVerilog `bind`. Beyond compiling: `rdata_churns` breaks a
+        # property the directed testbench structurally cannot see and is run
+        # both with and without the scaffold, so the pair shows what the
+        # scaffold adds rather than that the testbench works. Every IP gate
+        # above also compiles its own scaffold in, so the checks run across
+        # every option case of all nine IPs, not just this file's.
+        run: uv run pytest backend/tests/ips/test_verification_run.py -v
+
       - name: Run golden TB run gate (P3-03a, enforcing)
         # Executes each module's defaults smoke TB (SEMICRAFT_TB_RUN_ALL=1
         # for the full matrix). Went enforcing after the first advisory run

@@ -184,7 +184,9 @@ def test_reserved_write_is_exercised_when_sources_do_not_fill_the_word() -> None
 
 def test_generates_the_full_ip_file_set() -> None:
     res = generate_files("axil-intc", {})
-    assert [f.kind for f in res.files] == ["rtl", "doc", "tb", "tb", "doc"]
+    assert [f.kind for f in res.files] == ["rtl", "doc", "tb", "tb", "tb", "doc"]
+    # rtl, datasheet, SV TB, cocotb TB, verification scaffold, test plan.
+    assert [f.path for f in res.files if f.kind == "tb"][-1].endswith("_checks.sv")
     doc = next(f.text for f in res.files if f.kind == "doc")
     assert "## Register map" in doc
     assert "`PENDING`" in doc and "`STATUS`" in doc

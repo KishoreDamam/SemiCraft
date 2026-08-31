@@ -543,11 +543,109 @@ sequence latches identically under edge and level, so `level_instead_of_edge`
 and its inverse are caught only by the final section, which holds a source
 asserted across a write-1-to-clear.
 
+## Verification scaffolds, bound to the DUT (P4-09)
+
+Every AXI IP now emits a third `tb`-kind file, `<module>_checks.sv`: two
+passive monitors and a procedural checker, attached to the DUT with
+SystemVerilog `bind`. The generators came from P3-06 and had been sitting
+compile-gated and unattached ever since — an artifact that existed, passed its
+own tests, and verified nothing.
+
+**`bind`, not a testbench change.** The obvious route is to instantiate each
+scaffold from the generated testbench, which means teaching `TbSpec`,
+`TbModule` and `render_tb` about a new kind of child instance — a frozen
+contract (TB_SPEC) and every consumer of it — so a checker can see nets the DUT
+already exposes. `bind` needs none of it: the statement lives in the scaffold's
+own file, names the DUT module, and connects to identifiers resolved in the
+DUT's scope. The generated testbench is byte-identical with or without a
+scaffold, and the file is self-contained enough to drop into someone else's
+bench. The cost is that `bind` is SV-only, so a Verilog-2001 build gets no
+scaffold — the checks are simulation artifacts, so nothing usable is lost.
+
+**The memory IPs get a scaffold of their own.** `sync-fifo` and `sync-ram`
+have no bus, so they get one monitor and one check: read data must not move
+while the read enable is low. Both register their read behind an enable
+(`if (rd_en && !empty) rd_data <= ...`, `if (re) dout <= ...`), so it is a real
+property — and it is what the datasheet already promises ("dout holds when
+low"). A RAM built with `read_enable=False` has no gate and therefore no hold
+property, so it returns an empty spec and gets **no file**: a scaffold that
+checked nothing would be worse than none.
+
+**What it checks, and what it deliberately does not.** Not reset values or
+field semantics: the directed testbench and its SVA already cover those, and a
+scaffold that re-checks them is bulk, not coverage. It checks the two things a
+directed vector sequence structurally cannot:
+
+- **Liveness** — every `awvalid` is followed by `bvalid`, every `arvalid` by
+  `rvalid`, within a bounded number of cycles.
+- **Read-data stability** — `rdata`/`rresp` do not move on cycles when no read
+  was accepted. A directed read samples one cycle and never looks again, so a
+  target that spuriously rewrote its read register between transactions is
+  invisible to it.
+
+### Proving a checker can fail
+
+Verilator turns `$error` into an implicit `$stop` and aborts non-zero, so a
+firing check makes the run gate report `fail`. That is the mechanism; the
+mutations are the evidence.
+
+`rdata_churns` is the headline. It corrupts `rdata` on exactly the cycles no
+directed read is looking — the read still returns the right word at the cycle
+the testbench samples it, and inverts every cycle after. The same broken DUT is
+run **twice**, with and without the scaffold: the testbench passes, the
+scaffold fails. That pair is the whole argument. A mutation that fails both
+ways would only prove the testbench works, which was never in doubt.
+
+**Where the checks do not add power, said plainly.** Two of them do not, and
+both are worth recording rather than quietly dropping.
+
+The AXI *liveness* check: SemiCraft's own sequences check the response cycle of
+every transaction, so a lost response is caught by the testbench first and the
+latency counter never reaches its bound.
+
+The memory *read-hold* check: two separate attempts to find a mutation the
+RAM's directed testbench could not see both failed. Deleting the `if (re)` gate
+outright is caught because the next cycle's address overwrites the word about
+to be sampled. Narrowing it — invert `dout` only while `re` is low, so every
+read still returns the right word at the cycle it is sampled — is *also*
+caught, because the testbench reads `dout` on a cycle whose previous cycle had
+`re` low. That is a hold check, and the testbench deserves the credit.
+
+For both, the value is the file a user reuses in their own, more sparsely
+checked bench, and both are proven functional the same way: the gate silences
+the testbench's own `$fatal` calls first — turning it into a pure stimulus
+generator — so the scaffold is the only thing left that can stop the run.
+
+### The restyling trap, again
+
+An IP's `verification_spec(opts)` never sees the render style, so it speaks
+canonical names and they are mapped through the same name map the RTL and
+testbench use. This is not an exotic-configuration concern: AXI4-Lite fixes the
+reset active-low and `build_name_map` appends `_n`, so `areset` → `areset_n`
+happens at the **default** configuration. A scaffold that skipped restyling
+would bind to undefined nets out of the box — the same bug P3-05a already found
+once in the assertion path, which is why the run gate carries a naming-style
+axis rather than trusting that it was remembered.
+
+Only bare identifiers are renamed; `"bvalid && bready"` is left alone, because
+renaming inside expression text would mean parsing SystemVerilog.
+`check_spec_is_restylable` refuses to ship a catalog spec containing one, so
+the limitation is unreachable by accident rather than merely written down.
+
 ## Current state
 
 `by_kind("ip")` ships `axil-regblock`, `sync-fifo`, `sync-ram`, `axil-gpio`,
 `axil-uart`, `axil-spi`, `axil-i2c`, `axil-timer` and `axil-intc` — nine IPs,
-which clears the Phase-4 exit bar of eight.
+which clears the Phase-4 exit bar of eight. All nine carry a bound verification
+scaffold (P4-09) — the seven AXI IPs a bus monitor and liveness/stability
+checker, `sync-fifo` and `sync-ram` a read-hold checker.
+
+**Still unused: the scoreboard**, one of P3-06's three families. It needs a
+model of what the *next* value should be, and for a register block that model
+(`RegisterModel`) lives in Python driving the testbench — there is nothing in
+the DUT's scope to compare against. The FIFO is where it belongs, since
+ordering is the property there, and that is the next place to use it. Saying so
+is more useful than shipping a scoreboard that cannot fail.
 
 **Deferred: ROM with defined contents.** P4-04 pairs the RAM with a ROM. A
 ROM is only useful if its contents are specified, and there is no way to

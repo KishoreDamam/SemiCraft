@@ -197,6 +197,52 @@ def test_snapshot_cocotb(case: GoldenCase, request: pytest.FixtureRequest) -> No
 @pytest.mark.parametrize(
     "case", _MODULE_CASES, ids=[golden_case_id(c) for c in _MODULE_CASES]
 )
+def test_snapshot_checks(case: GoldenCase, request: pytest.FixtureRequest) -> None:
+    """Snapshot the verification scaffold (P4-09) — the third ``tb``-kind file.
+
+    Located by suffix for the same reason the cocotb snapshot is: "the tb file"
+    resolves to the SystemVerilog testbench. Absent for modules (only IPs
+    attach a scaffold) and for Verilog builds (`bind` is SV-only), which is a
+    skip, not a failure.
+    """
+    result = generate_files(case.snippet_id, case.resolved_options)
+    checks_file = next(
+        (f for f in result.files if f.path.endswith("_checks.sv")), None
+    )
+    if checks_file is None:
+        pytest.skip(
+            f"no verification scaffold for {case.snippet_id}/{case.case_name} — "
+            "the item attaches no verification_spec, the build is Verilog, or "
+            "semicraft_core.generate.EMIT_CHECKS is False. Not a regression."
+        )
+    assert checks_file.kind == "tb"
+
+    update = request.config.getoption("--update-golden")
+    path = case.checks_snapshot_path
+
+    if update:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(checks_file.text.encode("utf-8"))
+        return
+
+    if not path.is_file():
+        pytest.skip(
+            f"no committed scaffold golden at {path} yet. Run --update-golden "
+            "locally, review the diff, and commit to turn this into a gate."
+        )
+
+    expected = path.read_bytes()
+    actual = checks_file.text.encode("utf-8")
+    assert actual == expected, (
+        f"generated verification scaffold for {case.snippet_id}/"
+        f"{case.case_name} [{case.language}] no longer matches {path}. If "
+        "intentional, regenerate with --update-golden and review the diff."
+    )
+
+
+@pytest.mark.parametrize(
+    "case", _MODULE_CASES, ids=[golden_case_id(c) for c in _MODULE_CASES]
+)
 def test_snapshot_tb(case: GoldenCase, request: pytest.FixtureRequest) -> None:
     result = generate_files(case.snippet_id, case.resolved_options)
     tb_file = next((f for f in result.files if f.kind == "tb"), None)
