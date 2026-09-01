@@ -1,4 +1,4 @@
-// SemiCraft v0.3.0
+// SemiCraft v0.4.0
 // Snippet: fsm (config hash: dd834635dc40)
 // Moore FSM, 3 states, onehot encoding
 //

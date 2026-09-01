@@ -1,4 +1,4 @@
-# SemiCraft v0.3.0
+# SemiCraft v0.4.0
 # cocotb testbench for axil_gpio (config hash: b28d1b69442d)
 # BETA: the SystemVerilog testbench is the supported default backend.
 #

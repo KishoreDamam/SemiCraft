@@ -10,11 +10,23 @@ materialize them.
 ClockDividerOptions: ``divide_by`` (even, 2..65536, default 2),
 ``output_enable_style`` (toggle/pulse, default toggle), plus the common
 clocked fields ``reset_style``/``reset_polarity``.
+
+A ``styled_names`` case pins the naming axis. Nothing covered it until P4-11,
+and three separate restyling bugs shipped behind that gap: assertion specs
+naming canonical resets (P3-05a), a hardcoded testbench clock net (P4-07), and
+datasheet port tables that never applied the name map at all. Every generated
+artifact resolves identifiers through ``build_name_map``; a case that changes
+every identifier is what makes a generator that forgot to visible.
 """
 
 from __future__ import annotations
 
 CASES: dict[str, dict] = {
+    # --- naming style (the axis no golden case covered until P4-11) ---------
+    "styled_names": {
+        "language": "sv",
+        "naming": {"convention": "camel", "prefix": "p_"},
+    },
     "defaults": {},
     # --- single-option flips from default -----------------------------------
     "divide_by_10": {"divide_by": 10},

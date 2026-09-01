@@ -1,4 +1,4 @@
-# SemiCraft v0.3.0
+# SemiCraft v0.4.0
 # cocotb testbench for lfsr (config hash: 6e7aa99607fa)
 # BETA: the SystemVerilog testbench is the supported default backend.
 #

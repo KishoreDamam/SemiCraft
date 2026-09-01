@@ -1,4 +1,4 @@
-# SemiCraft v0.3.0
+# SemiCraft v0.4.0
 # cocotb testbench for axil_spi (config hash: 32ff198b7a0a)
 # BETA: the SystemVerilog testbench is the supported default backend.
 #

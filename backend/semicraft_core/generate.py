@@ -34,10 +34,12 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from .example import example_filename
 from .ir.nodes import Module
 from .license import DISCLAIMER
 from .modules.contract import PortGroup
 from .render import StyleOptions, render
+from .render.style import build_name_map
 from .snippets import registry
 from .version import VERSION
 
@@ -251,13 +253,46 @@ def _render_rtl(item, opts, chash: str) -> tuple[str, str, str, Module]:
     return path, code, language, module
 
 
-def _md_port_table(port_groups: list[PortGroup], explanation) -> list[str]:
+def resolve_doc_port_name(
+    doc_name: str, canonical: set[str], rename
+) -> str:
+    """The rendered net a datasheet's declared port name refers to.
+
+    ``port_groups()`` and ``ExplanationDoc.signals`` list canonical IR port
+    names **except** for an active-low reset, which each module's own helper
+    suffixes with ``_n`` — a documentation-only convention that P3-07's test-plan
+    generator already accommodates and documents (see
+    ``testplan._port_coverage_table``). So a doc name resolves canonically when
+    it is one, and otherwise by stripping that one suffix.
+
+    Falling back to the name unchanged is deliberate: a doc naming something
+    that is not a port at all (an internal signal an ``ExplanationDoc``
+    mentions) is passed through rather than mangled.
+    """
+    if doc_name in canonical:
+        return rename(doc_name)
+    if doc_name.endswith("_n") and doc_name[:-2] in canonical:
+        return rename(doc_name[:-2])
+    return doc_name
+
+
+def _md_port_table(port_groups: list[PortGroup], explanation, rtl_module, rename) -> list[str]:
     """Render the grouped port table for the doc file from ``port_groups``.
 
-    Signal directions/descriptions come from the ExplanationDoc (keyed by name);
-    grouping and per-group descriptions come from ``port_groups``.
+    Signal directions/descriptions come from the ExplanationDoc (keyed by the
+    *declared* name); grouping and per-group descriptions come from
+    ``port_groups``; the name actually printed is the **rendered** one.
+
+    That last part was missing until P4-11. The table printed declared names
+    verbatim, so under any naming convention, prefix or suffix the datasheet
+    listed ports that do not exist in the generated RTL — for every module and
+    every IP, at every configuration except the default. No golden case set a
+    naming style, so nothing could see it. This is the third bug of that exact
+    shape in this project (P3-05a's assertion specs, P4-07's hardcoded TB clock
+    net), which is why a styled-names golden case landed alongside the fix.
     """
     by_name = {s.name: s for s in explanation.signals}
+    canonical = {p.name for p in rtl_module.ports}
     lines: list[str] = []
     for group in port_groups:
         lines.append(f"### {group.name}")
@@ -270,7 +305,8 @@ def _md_port_table(port_groups: list[PortGroup], explanation) -> list[str]:
             sig = by_name.get(port_name)
             direction = sig.direction if sig else "input"
             desc = sig.description if sig else ""
-            lines.append(f"| `{port_name}` | {direction} | {desc} |")
+            display = resolve_doc_port_name(port_name, canonical, rename)
+            lines.append(f"| `{display}` | {direction} | {desc} |")
         lines.append("")
     return lines
 
@@ -282,6 +318,8 @@ def _module_doc(
     config_hash_value: str,
     interface_sections: list[str] | None = None,
     timing_sections: list[str] | None = None,
+    rtl_module=None,
+    rename=None,
 ) -> str:
     """Markdown datasheet for a module (Appendix A.3): title, purpose, port
     table (grouped from ``port_groups``), configuration, assumptions/limitations.
@@ -307,7 +345,7 @@ def _module_doc(
         "",
         "## Ports",
         "",
-        *_md_port_table(port_groups, explanation),
+        *_md_port_table(port_groups, explanation, rtl_module, rename or (lambda n: n)),
         *(interface_sections or []),
         *(timing_sections or []),
         "## Configuration",
@@ -387,6 +425,49 @@ def _ip_timing_section(item, opts, rtl_module) -> list[str]:
     return timing_section_md(diagram)
 
 
+def _ip_example(item, opts, rtl_module, language: str, chash: str) -> str:
+    """Compilable example instantiation for an IP (P4-11).
+
+    Grouping and bundle annotations come from the IP's own metadata, restyled
+    through the same name map as everything else so the connections name the
+    ports the RTL declares.
+    """
+    from .example import example_module
+    from .ips.bundles import restyle_bundles
+    from .render.style import build_name_map
+    from .tb.generate_tb import _param_values, _width_of
+
+    params = _param_values(rtl_module)
+    widths = {p.name: _width_of(p.dtype, params) for p in rtl_module.ports}
+    names = build_name_map(rtl_module, _style_from_options(opts))
+
+    def rename(canonical: str) -> str:
+        return names.get(canonical, canonical)
+
+    # Resolve through the same convention the datasheet uses, so an active-low
+    # reset declared as `areset_n` lands in its own group rather than falling
+    # through to the ungrouped bucket at the end.
+    canonical = {p.name for p in rtl_module.ports}
+    groups = [
+        PortGroup(
+            name=g.name,
+            ports=[resolve_doc_port_name(p, canonical, rename) for p in g.ports],
+            description=g.description,
+        )
+        for g in item.port_groups(opts)
+    ]
+    return example_module(
+        rtl_module,
+        groups,
+        restyle_bundles(list(item.bundles(opts)), names),
+        widths,
+        rename,
+        language=language,
+        config_hash_value=chash,
+        description=item.explain(opts).purpose.split(".")[0] + ".",
+    )
+
+
 def generate_files(item_id: str, options: dict) -> GenerateFilesResult:
     """Generate the full file set for a catalog item (API v2, Appendix A.1/A.3).
 
@@ -422,8 +503,16 @@ def generate_files(item_id: str, options: dict) -> GenerateFilesResult:
         # smoke testbench runs, so it cannot drift from verified behaviour -
         # see semicraft_core/wavedrom.py.
         timing = _ip_timing_section(item, opts, rtl_module) if kind == "ip" else []
+        doc_names = build_name_map(rtl_module, _style_from_options(opts))
         doc_text = _module_doc(
-            item, opts, explanation, chash, interface_sections, timing
+            item,
+            opts,
+            explanation,
+            chash,
+            interface_sections,
+            timing,
+            rtl_module,
+            lambda canonical: doc_names.get(canonical, canonical),
         )
         files.append(GeneratedFile(path=f"{doc_stem}.md", kind="doc", text=doc_text))
 
@@ -470,7 +559,6 @@ def generate_files(item_id: str, options: dict) -> GenerateFilesResult:
         # Verilog RTL build loses nothing it could have used.
         if EMIT_CHECKS and language == "sv" and hasattr(item, "verification_spec"):
             from .ips.verification import render_verification, verification_filename
-            from .render.style import build_name_map
 
             names = build_name_map(rtl_module, _style_from_options(opts))
             checks_text = render_verification(
@@ -486,6 +574,25 @@ def generate_files(item_id: str, options: dict) -> GenerateFilesResult:
                         text=checks_text,
                     )
                 )
+
+        # Example instantiation (P4-11), IPs only. A second `rtl`-kind file,
+        # distinguished by path exactly as the two `doc` files and the three
+        # `tb` files are. Appended after the primary RTL, so the long-standing
+        # `next(f for f in files if f.kind == "rtl")` lookup keeps resolving to
+        # the IP itself.
+        #
+        # A real file rather than a fenced block in the datasheet, because the
+        # golden gate lints it with `-Wall` against the IP it instantiates: an
+        # example nobody compiles is the artifact-that-cannot-fail problem in
+        # its most user-visible form.
+        if kind == "ip":
+            files.append(
+                GeneratedFile(
+                    path=example_filename(rtl_module.name, language),
+                    kind="rtl",
+                    text=_ip_example(item, opts, rtl_module, language, chash),
+                )
+            )
 
         # Test-plan document (P3-07): a second `doc`-kind file appended after
         # the datasheet, derived entirely from ExplanationDoc/port_groups/

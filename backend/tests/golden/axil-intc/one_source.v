@@ -1,4 +1,4 @@
-// SemiCraft v0.3.0
+// SemiCraft v0.4.0
 // Snippet: axil_intc (config hash: 932551a34533)
 // AXI4-Lite interrupt controller, 1 source(s), edge-triggered
 //

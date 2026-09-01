@@ -124,6 +124,20 @@ class GoldenCase:
         )
 
     @property
+    def example_snapshot_path(self) -> Path:
+        """Golden path for the example instantiation (P4-11), a second
+        ``rtl``-kind file.
+
+        Only IPs emit one. Language-qualified twice — ``<case>.<ext>_example.
+        <ext>`` — because the example *is* HDL in that language, so the trailing
+        extension has to be real for a compile gate to hand it to Verilator,
+        while the leading one keeps sv/verilog variants of a case apart the way
+        every other snapshot does.
+        """
+        ext = _extension(self.language)
+        return GOLDEN_ROOT / self.snippet_id / f"{self.case_name}.{ext}_example.{ext}"
+
+    @property
     def resolved_options(self) -> dict:
         """Options dict with ``language`` pinned to this case's resolved language."""
         return {**self.options, "language": self.language}

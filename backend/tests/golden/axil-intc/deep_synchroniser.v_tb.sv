@@ -1,4 +1,4 @@
-// SemiCraft v0.3.0
+// SemiCraft v0.4.0
 // Testbench: axil_intc_tb (config hash: e44772d75fd5)
 // Smoke testbench (stub, compile-checked only) for axil_intc
 //

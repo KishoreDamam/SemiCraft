@@ -1,4 +1,4 @@
-# SemiCraft v0.3.0
+# SemiCraft v0.4.0
 # cocotb testbench for axil_uart (config hash: 0220a1517a91)
 # BETA: the SystemVerilog testbench is the supported default backend.
 #

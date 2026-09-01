@@ -1,4 +1,4 @@
-// SemiCraft v0.3.0
+// SemiCraft v0.4.0
 // Testbench: axil_uart_tb (config hash: 72a42012c51c)
 // Smoke testbench (stub, compile-checked only) for axil_uart
 //

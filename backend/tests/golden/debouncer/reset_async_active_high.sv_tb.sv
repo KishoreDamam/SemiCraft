@@ -1,4 +1,4 @@
-// SemiCraft v0.3.0
+// SemiCraft v0.4.0
 // Testbench: debouncer_tb (config hash: ca39af83da6d)
 // Smoke testbench (stub, compile-checked only) for debouncer
 //

@@ -1,4 +1,4 @@
-// SemiCraft v0.3.0
+// SemiCraft v0.4.0
 // Snippet: shift_register (config hash: bf4d9a4958d0)
 // Right-shifting shift register, 16-bit
 //

@@ -1,4 +1,4 @@
-// SemiCraft v0.3.0
+// SemiCraft v0.4.0
 // Snippet: decoder (config hash: afa45e52b095)
 // 2-output binary decoder, active-low
 //

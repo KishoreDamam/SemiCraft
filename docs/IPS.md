@@ -685,6 +685,65 @@ The window is the first 40 directed cycles, which covers reset release and the
 first few bus transactions. The serial IPs run for thousands of cycles at their
 default divisors; the datasheet says so when it truncates.
 
+## Example instantiations, compiled (P4-11)
+
+Every IP emits `<module>_example.sv` / `.v`: a wrapper that exposes the IP's
+ports and instantiates it, with the connections grouped and commented from the
+IP's own `port_groups()` and annotated from its `bundles()`.
+
+**A real file, not a fenced block in the datasheet.** A copy-pasteable snippet
+with a wrong port name or a stale width is worse than no snippet, because a
+reader trusts it — and nothing about generating one into markdown would ever
+catch that. The golden gate lints each example `-Wall` clean *against the IP it
+instantiates*, at the same zero-warning bar the RTL itself has to clear. Rename
+a port and the example stops linting.
+
+It is deliberately **not** an integration example: the wrapper passes every port
+straight through, because that is the only shape both derivable from metadata
+and lint-clean for every IP. What the file guarantees is that the
+instantiation — names, widths, directions, grouping — is correct for that
+configuration and compiles today.
+
+The value is the grouping: it says which nineteen signals form one AXI4-Lite
+target port and which three are pads, which is what a reader has to work out
+before wiring anything.
+
+**A recorded stopgap.** The synthesizable IR has no module-instance node, so
+this emits HDL text directly, the way the checker generator does. Phase 5's
+subsystem generator needs real instantiation in the IR — wiring groups of IPs
+into a top wrapper *is* instantiation as a first-class construct. When that node
+lands (an IR_SPEC change, so a recorded decision), this emitter should be
+rewritten on top of it rather than left to drift as a second way of writing the
+same construct.
+
+## The naming-style bug behind three shipped defects
+
+P4-11's example generator had to resolve every connection to a real net, which
+is how it surfaced this: **the datasheet's port table never applied the render
+name map.** Under any naming convention, prefix or suffix, every module and
+every IP listed ports that do not exist in the generated RTL — shipped since
+v0.2.0.
+
+It is the third bug of exactly this shape:
+
+1. **P3-05a** — assertion specs named canonical resets, so `disable iff (!rst)`
+   referenced a net rendered `rst_n`.
+2. **P4-07** — the testbench clock net was hardcoded `clk`.
+3. **P4-11** — datasheet port tables printed declared names verbatim.
+
+The common cause is not carelessness three times over. It is that **no golden
+case anywhere set a naming style**, so the entire style axis was invisible to
+the goldens: a generator that forgot to restyle produced byte-identical output
+at the default configuration, which is all the goldens ever exercised.
+
+The fix is therefore two-part. The datasheet now resolves each declared name
+through the map — reusing the reset-suffix convention P3-07's test-plan
+generator already documented, where `port_groups()` lists canonical names except
+for an active-low reset it suffixes with `_n`. And a **`styled_names` case now
+exists on every catalog item**, so the axis is covered by goldens permanently.
+Every existing golden was byte-identical after the fix, which is exactly why the
+bug survived four releases.
+
 ## Current state
 
 `by_kind("ip")` ships `axil-regblock`, `sync-fifo`, `sync-ram`, `axil-gpio`,

@@ -1,4 +1,4 @@
-# SemiCraft v0.3.0
+# SemiCraft v0.4.0
 # cocotb testbench for axil_i2c (config hash: eefe366c0d3e)
 # BETA: the SystemVerilog testbench is the supported default backend.
 #

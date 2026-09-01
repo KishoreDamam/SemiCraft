@@ -220,7 +220,9 @@ file as an extra Verilator source.
 | P4-08 timer + intc | DONE | `ips/axil_timer.py`: prescaled **down**-counter (zero test instead of a full-width comparator), one-shot or periodic, maskable level `irq`. One-shot stops via an internal `running` flop because `CTRL.enable` is an `rw` field only software can write. `ips/axil_intc.py`: `num_irq` sources, **mask on the output not on the latch** (a request masked at arrival must still be findable when software enables it later), edge or level trigger as a generate-time option, edge history taken *after* the synchroniser. 7 + 9 golden cases x 2 languages |
 | P4-09 verification scaffold | DONE | The P3-06 monitor/checker generators, unattached since Phase 3, bound to all nine IPs. `checkers/bind.py` emits SystemVerilog **`bind`**, so no TB_SPEC / `TbModule` / `render_tb` change was needed and the generated testbench is byte-identical with or without a scaffold. `checkers/restyle.py` maps canonical names through the render name map (`areset` -> `areset_n` at the *default* configuration). New `tb`-kind file `<module>_checks.sv`, SV only. Checks liveness + read-data stability for the seven AXI IPs; read-hold for `sync-fifo`/`sync-ram` - deliberately not the reset values the SVA already covers. 58 new goldens |
 | P4-10 per-IP doc generator | DONE | `wavedrom.py`: a `## Timing` section on every IP datasheet, WaveDrom JSON inline in the markdown (`GeneratedFile.kind` is a frozen Literal and a `.json` is none of rtl/tb/doc - the same blocker as the ROM's `$readmemh`). **Rendered from the same `TbSpec` the smoke TB runs**, so the diagram is verified by the same run gate as the RTL and cannot drift. Unchecked cycles are drawn `x`, which makes it double as a directed-coverage picture. 129 doc goldens, all additions |
-| Next | **P4-11 (example instantiations per IP + golden + release v0.4.0)** — the last WP of Phase 4. Then Phase 5 (subsystem generator). Still open: the **scoreboard family is unused** — the FIFO is where it belongs; the two blocked items (async FIFO, ROM) each need a recorded contract decision; wire the cocotb path into `POST /api/v2/simulate` (SV-only today); the full suite is ~50 min and grows with each IP — if it becomes the bottleneck, move the per-IP run gates to the nightly matrix and keep `defaults` in the main loop, the same trade already made for the TB matrix; **v0.3.0 prepared but NOT tagged**, and PR #1 is merged so the nine Phase-4 commits need a **new** PR — which would also be the first CI run of any of these gates | 2-agent budget per session |
+| P4-11 examples + v0.4.0 | DONE (prep) — NOT TAGGED | `example.py`: `<module>_example.sv|.v` per IP, a second `rtl`-kind file, **lint-gated `-Wall` against the IP it instantiates** rather than printed into markdown. Connections grouped from `port_groups()`, annotated from `bundles()`. VERSION + pyproject 0.3.0 -> 0.4.0; RELEASE_CHECKLIST gains a v0.4.0 section incl. Deliberate gaps. All goldens regenerated: **banner-only diff, 588 config hashes byte-identical** |
+| doc naming fix | DONE | The datasheet's port table **never applied the render name map** — under any naming convention/prefix/suffix every module and every IP listed ports absent from the RTL. Shipped since v0.2.0. Third bug of this shape (P3-05a assertions, P4-07 TB clock). Root cause: **no golden case set a naming style**, so the axis was invisible. Fixed + a `styled_names` case added to all 26 catalog items |
+| Next | **Phase 4 is complete (13/13 WPs, 9 IPs).** Before Phase 5: open a PR so CI actually runs the P4 gates — `ci.yml` triggers on `main` and PRs only, so every gate added since P4-01 is locally-verified only — then tag **v0.3.0 and v0.4.0** on main. Then Phase 5 (subsystem generator), whose first need is a real **module-instance node in the IR** (an IR_SPEC decision); `example.py` emits instantiation as text and should be rewritten on top of that node, not duplicated. Still open: the **scoreboard family is unused** (the FIFO is where it belongs); async FIFO and ROM each need a recorded contract decision; wire cocotb into `POST /api/v2/simulate`; the full suite is ~80 min — moving the per-IP run gates to the nightly matrix is the obvious relief | 2-agent budget per session |
 
 ### P4-01: the contract is proven by a real IP, not by its own docstrings
 
@@ -785,3 +787,53 @@ diagram, which is not a good enough reason to open it.
 have rewritten roughly fifteen hundred goldens for a decision nobody has made;
 a test pins that a module datasheet has no timing section, so the boundary is
 deliberate rather than accidental.
+
+### P4-11: the example generator found a bug four releases old
+
+The WP was examples plus the release. The examples themselves were
+straightforward — a wrapper per IP, ports grouped from `port_groups()`,
+annotated from `bundles()`, emitted as a **real HDL file** and lint-gated
+`-Wall` against the IP it instantiates rather than printed into markdown. A
+copy-pasteable snippet with a wrong port name is worse than none, because a
+reader trusts it; the gate was confirmed able to fail by mis-wiring one
+connection in a committed golden.
+
+What the WP actually bought was a bug it stumbled into. The example's
+connections have to resolve to real nets, and building that resolution surfaced
+that **the datasheet's port table never applied the render name map at all**.
+Under any naming convention, prefix or suffix, every module and every IP listed
+ports that do not exist in the generated RTL. Shipped since v0.2.0.
+
+**The third instance of one pattern.** P3-05a: assertion specs named canonical
+resets. P4-07: the testbench clock net was hardcoded `clk`. Now the datasheets.
+Three separate generators, three separate authors' worth of care, one shared
+cause — **no golden case anywhere set a naming style.** A generator that forgot
+to restyle produced byte-identical output at the default configuration, which is
+all the goldens ever exercised. The proof is that fixing this changed *zero* of
+the 1873 existing goldens.
+
+So the fix had to be two-part, and the second part matters more: a
+`styled_names` case now exists on **all 26 catalog items**, covering RTL,
+datasheet, both testbenches, test plan, verification scaffold and example. The
+axis is no longer invisible. Where a bug recurs three times, fixing the third
+instance is not the work — closing the gap that let all three through is.
+
+**The fix itself was small because P3-07 had already mapped the terrain.** The
+test-plan generator hit the same `port_groups()` quirk — canonical names except
+an active-low reset the metadata suffixes `_n` — and documented it in a comment
+rather than papering over it. That comment is what made the datasheet fix a
+ten-line resolution helper instead of a rewrite of every IP's metadata. Worth
+noticing: the payoff for writing down *why* something is odd arrived a whole
+phase later.
+
+**Release hygiene held.** All goldens regenerated to a banner-only diff with 588
+config hashes byte-identical — the same check v0.3.0 introduced after v0.2.0
+shipped stamped with the wrong version. `test_version_consistency.py` ties
+VERSION, pyproject and the checklist heading together, so the three moved as
+one.
+
+**Phase 4 is complete: 13 WPs, 9 IPs, exit criterion of 8+ cleared.** Two
+deliberate blocks (async FIFO, ROM) carry recorded unblock paths, and the
+scoreboard family is still unattached with a recorded reason. Nothing in Phase 4
+has ever been executed by CI — the branch it was built on is not one `ci.yml`
+triggers on — so a pull request should precede both tags.

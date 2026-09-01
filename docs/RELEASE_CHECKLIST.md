@@ -179,3 +179,88 @@ Verilator installs and runs in Linux containers (`apt-get install -y verilator`,
 5.020) and in CI. The "no Verilator locally" note in `CLAUDE.md` is a
 Windows-host fact only; on a container both the compile and run gates can be
 exercised before pushing.
+
+---
+
+# SemiCraft v0.4.0 — Phase 4 Release
+
+Phase 4 goal (plan): **IP blocks** — curated, integratable blocks with register
+maps, bus-side port bundles, datasheets and testbenches that run.
+Plan exit criterion: *8+ IPs, each: both-language RTL (AXI IPs SV-only is an
+allowed documented exception), regblock-driven where applicable, datasheet, TB
+running in CI.*
+
+| Criterion | Status | Evidence |
+|---|---|---|
+| 8+ IPs | PASS (9) | `axil-regblock`, `sync-fifo`, `sync-ram`, `axil-gpio`, `axil-uart`, `axil-spi`, `axil-i2c`, `axil-timer`, `axil-intc` — pinned by `SHIPPED_IPS` so adding one is a deliberate edit |
+| IP contract: register map + port bundles | PASS | P4-01: `IpDef` = `ModuleDef` + `register_map(opts)` + `bundles(opts)`; rules R1–R6 and B1–B4 enforced during generation |
+| Both-language RTL | PASS | every IP renders SystemVerilog and Verilog-2001; both linted `-Wall` clean per golden case |
+| Regblock-driven where applicable | PASS | P4-05a composition: seven IPs splice `build_axil_regblock(..., field_ports=False)` into one flat module, no submodule instantiation |
+| Datasheet per IP | PASS | markdown datasheet with grouped port table, register map, bus interfaces (P4-01) and a WaveDrom timing diagram rendered from the executed testbench (P4-10) |
+| TB running in CI | PASS | per-IP Verilator run gate for all nine, every option case, each with a **mutation half** that must fail |
+| Verification scaffolds attached | PASS | P4-09: monitor + checker per IP, attached with SystemVerilog `bind`, proven able to fail a broken DUT |
+| Example instantiation per IP | PASS | P4-11: `<module>_example.sv|.v`, lint-gated `-Wall` against the IP it instantiates |
+
+## What is new since v0.3.0
+
+- **Nine IPs**, all regblock-composed where they have a bus.
+- **Verification scaffolds are attached** (P4-09). P3-06's generators shipped
+  standalone in v0.3.0 and stayed unattached through nine IPs; they now bind
+  into every IP and are proven to fail a broken DUT.
+- **Timing diagrams** (P4-10), rendered from the same `TbSpec` the smoke
+  testbench executes, so a diagram cannot be wrong while CI is green.
+- **Example instantiations** (P4-11), compiled and `-Wall` linted, not printed
+  into markdown.
+- **A `styled_names` golden case on every catalog item.** No golden case had
+  ever set a naming style, which is how three separate restyling bugs shipped.
+
+## Deliberate gaps at this release
+
+- **Async FIFO (P4-03b) is not shipped.** It needs a two-clock testbench;
+  `TbSpec` carries one clock and `TbModule` one `ClockGen`. Tying both clocks
+  would exercise the FIFO logic and *nothing* about the CDC while the datasheet
+  claimed CDC safety. Unblocking it is a TB_SPEC contract decision.
+- **ROM (P4-04b) is not shipped.** It needs memory initialisation, which the
+  synthesizable IR does not express. Two routes, both frozen-contract changes;
+  picking between them is the first task of that work package.
+- **The scoreboard family is still unattached.** One of P3-06's three. It needs
+  a model of the next expected value; for a register block that model is
+  `RegisterModel`, which lives in Python driving the testbench, so there is
+  nothing in the DUT's scope to compare against. The FIFO is where it belongs.
+- **`bind` is SystemVerilog-only**, so a Verilog-2001 build gets no
+  verification scaffold. The checks are simulation artifacts and the smoke TB is
+  SystemVerilog either way.
+- **The AXI liveness and memory read-hold checks add nothing to the smoke
+  gate.** SemiCraft's directed sequences already check every transaction's
+  response cycle and the RAM's read hold. Both are kept for the file a user
+  reuses in a sparser bench, and both are proven able to fire.
+- **cocotb is still beta** and still not wired into `POST /api/v2/simulate`.
+
+## Defects found and fixed during Phase 4
+
+Each was invisible to the tests that existed at the time:
+
+- **Every generated testbench was uncompilable under any non-default naming
+  style** — the TB clock net was hardcoded `clk`. Shipped in v0.2.0 and v0.3.0.
+- **Datasheet port tables never applied the render name map**, so under any
+  naming convention, prefix or suffix they listed ports that do not exist in the
+  RTL — every module and every IP, shipped since v0.2.0. Found by P4-11's
+  example generator, whose connections had to resolve to real nets.
+- **A reserved-bit-rejected AXI write answered OKAY**: the write vanished with a
+  success response.
+- **The I2C quarter counter kept counting while the clock was stretched**, so a
+  stretched bus would hang for 2¹⁶ cycles.
+- **`_sample_at_phase2` never checked the phase**, so an I2C read shifted in
+  four samples per bit. The write transaction passed anyway.
+- **The GPIO synchroniser check was placed one edge too early** and passed
+  against a design with no metastability guard at all.
+- **The verification scaffold hardcoded a 32-bit `rdata`** and did not compile
+  against the one IP whose data width is an option.
+
+## CI at tag time
+
+Phase 4 was developed on a branch that CI does not run on (`ci.yml` triggers on
+`main` and pull requests), so every gate above was verified locally against
+Verilator 5.020. **Open a pull request and confirm CI green before cutting the
+tag** — that run will be the first CI execution of the P4 gates.
+

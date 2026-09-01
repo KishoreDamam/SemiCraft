@@ -1,4 +1,4 @@
-# SemiCraft v0.3.0
+# SemiCraft v0.4.0
 # cocotb testbench for axil_timer (config hash: ec2eb3d1bf1b)
 # BETA: the SystemVerilog testbench is the supported default backend.
 #

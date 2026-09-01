@@ -1,4 +1,4 @@
-// SemiCraft v0.3.0
+// SemiCraft v0.4.0
 // Testbench: sync_fifo_tb (config hash: ac4b61ce8c0b)
 // Smoke testbench (stub, compile-checked only) for sync_fifo
 //

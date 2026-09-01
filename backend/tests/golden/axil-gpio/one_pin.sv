@@ -1,4 +1,4 @@
-// SemiCraft v0.3.0
+// SemiCraft v0.4.0
 // Snippet: axil_gpio (config hash: b28d1b69442d)
 // AXI4-Lite GPIO, 1 pin(s)
 //

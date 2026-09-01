@@ -1,4 +1,4 @@
-# SemiCraft v0.3.0
+# SemiCraft v0.4.0
 # cocotb testbench for debouncer (config hash: afd0954e174b)
 # BETA: the SystemVerilog testbench is the supported default backend.
 #

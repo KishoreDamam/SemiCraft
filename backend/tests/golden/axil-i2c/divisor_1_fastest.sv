@@ -1,4 +1,4 @@
-// SemiCraft v0.3.0
+// SemiCraft v0.4.0
 // Snippet: axil_i2c (config hash: 8fe3b2c829db)
 // AXI4-Lite I2C master, quarter-period divisor 1
 //

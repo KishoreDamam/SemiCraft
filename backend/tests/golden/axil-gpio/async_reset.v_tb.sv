@@ -1,4 +1,4 @@
-// SemiCraft v0.3.0
+// SemiCraft v0.4.0
 // Testbench: axil_gpio_tb (config hash: 56f8c43264a3)
 // Smoke testbench (stub, compile-checked only) for axil_gpio
 //

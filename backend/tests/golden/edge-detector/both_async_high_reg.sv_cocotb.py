@@ -1,4 +1,4 @@
-# SemiCraft v0.3.0
+# SemiCraft v0.4.0
 # cocotb testbench for edge_detector (config hash: ed1f8e7db2d7)
 # BETA: the SystemVerilog testbench is the supported default backend.
 #

@@ -1,4 +1,4 @@
-# SemiCraft v0.3.0
+# SemiCraft v0.4.0
 # cocotb testbench for pwm (config hash: d120f72b5a8e)
 # BETA: the SystemVerilog testbench is the supported default backend.
 #

@@ -197,6 +197,48 @@ def test_snapshot_cocotb(case: GoldenCase, request: pytest.FixtureRequest) -> No
 @pytest.mark.parametrize(
     "case", _MODULE_CASES, ids=[golden_case_id(c) for c in _MODULE_CASES]
 )
+def test_snapshot_example(case: GoldenCase, request: pytest.FixtureRequest) -> None:
+    """Snapshot the example instantiation (P4-11) — the second ``rtl``-kind file.
+
+    Located by suffix, not by "the rtl file": that lookup resolves to the IP
+    itself, which every other gate depends on. Absent for modules (only IPs
+    emit one), which is a skip rather than a failure.
+    """
+    result = generate_files(case.snippet_id, case.resolved_options)
+    example = next((f for f in result.files if "_example." in f.path), None)
+    if example is None:
+        pytest.skip(
+            f"no example instantiation for {case.snippet_id}/{case.case_name} — "
+            "the item is not an IP. Not a regression."
+        )
+    assert example.kind == "rtl"
+
+    update = request.config.getoption("--update-golden")
+    path = case.example_snapshot_path
+
+    if update:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(example.text.encode("utf-8"))
+        return
+
+    if not path.is_file():
+        pytest.skip(
+            f"no committed example golden at {path} yet. Run --update-golden "
+            "locally, review the diff, and commit to turn this into a gate."
+        )
+
+    expected = path.read_bytes()
+    actual = example.text.encode("utf-8")
+    assert actual == expected, (
+        f"generated example for {case.snippet_id}/{case.case_name} "
+        f"[{case.language}] no longer matches {path}. If intentional, "
+        "regenerate with --update-golden and review the diff."
+    )
+
+
+@pytest.mark.parametrize(
+    "case", _MODULE_CASES, ids=[golden_case_id(c) for c in _MODULE_CASES]
+)
 def test_snapshot_checks(case: GoldenCase, request: pytest.FixtureRequest) -> None:
     """Snapshot the verification scaffold (P4-09) — the third ``tb``-kind file.
 

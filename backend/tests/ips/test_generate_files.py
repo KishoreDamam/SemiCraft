@@ -2,9 +2,15 @@
 
 The claim P4-01 makes is that an IP is a module plus metadata, so nothing in
 the Phase-2/Phase-3 pipeline needs to know about IPs. These tests check that
-claim by running the reference IP through ``generate_files`` and asserting it
-gets the identical file set a module gets, plus exactly two datasheet
-sections.
+claim by running the reference IP through ``generate_files``.
+
+The claim has been *narrowed*, not broken, as Phase 4 went on: an IP no longer
+gets the identical file set a module gets, it gets that set plus artifacts only
+an IP has — two datasheet sections (P4-01), a verification scaffold when it
+attaches one (P4-09), a timing diagram (P4-10) and an example instantiation
+(P4-11). What still holds, and what these tests assert, is that every file a
+module emits is still emitted, in the same relative order, by the same code
+path.
 """
 
 from __future__ import annotations
@@ -25,16 +31,41 @@ def _of_kind(res, kind: str) -> list[str]:
     return [f.text for f in res.files if f.kind == kind]
 
 
-def test_ip_produces_the_same_file_set_as_a_module(registered_ip) -> None:
+def test_ip_produces_the_module_file_set_plus_its_own(registered_ip) -> None:
+    """An IP is a module plus IP-specific artifacts, in a pinned order.
+
+    This test used to assert an IP produced *exactly* a module's file set. That
+    stopped being true as Phase 4 added artifacts only an IP has, and the
+    honest statement now is the containment one: every file a module emits is
+    here, in the same relative order, plus the example instantiation (P4-11).
+
+    The reference IP attaches no ``verification_spec``, so it gets no
+    ``_checks.sv`` — which is the point of checking the reference IP as well as
+    the catalog: the scaffold is opt-in, and the example is not. An example is
+    derivable from any IP's ports, groups and bundles, so a new IP should not
+    have to remember to ask for one.
+    """
     res = _files(registered_ip)
-    assert [f.kind for f in res.files] == ["rtl", "doc", "tb", "tb", "doc"]
+    assert [f.kind for f in res.files] == ["rtl", "doc", "tb", "tb", "rtl", "doc"]
     assert [f.path for f in res.files] == [
         "csr_block.sv",
         "csr_block.md",
         "csr_block_tb.sv",
         "test_csr_block.py",
+        "csr_block_example.sv",
         "csr_block_testplan.md",
     ]
+
+    module_files = [f.path for f in generate_files("gray-counter", {}).files]
+    suffixes = [p.split("gray_counter")[-1] for p in module_files]
+    ip_suffixes = [
+        f.path.split("csr_block")[-1]
+        for f in res.files
+        if not f.path.endswith("_example.sv")
+    ]
+    assert suffixes == [s for s in ip_suffixes if s in suffixes], (
+        "an IP no longer emits the module file set in the module's own order"
+    )
 
 
 def test_ip_datasheet_carries_both_interface_sections(registered_ip) -> None:

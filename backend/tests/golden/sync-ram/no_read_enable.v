@@ -1,4 +1,4 @@
-// SemiCraft v0.3.0
+// SemiCraft v0.4.0
 // Snippet: sync_ram (config hash: d7838913fc69)
 // 256 x 8-bit single-port synchronous RAM
 //

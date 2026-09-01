@@ -1,4 +1,4 @@
-# SemiCraft v0.3.0
+# SemiCraft v0.4.0
 # cocotb testbench for axil_regblock (config hash: aab4a66797fe)
 # BETA: the SystemVerilog testbench is the supported default backend.
 #

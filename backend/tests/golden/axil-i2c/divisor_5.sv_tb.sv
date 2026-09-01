@@ -1,4 +1,4 @@
-// SemiCraft v0.3.0
+// SemiCraft v0.4.0
 // Testbench: axil_i2c_tb (config hash: a66f810cd46a)
 // Smoke testbench (stub, compile-checked only) for axil_i2c
 //

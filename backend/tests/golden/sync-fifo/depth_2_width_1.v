@@ -1,4 +1,4 @@
-// SemiCraft v0.3.0
+// SemiCraft v0.4.0
 // Snippet: sync_fifo (config hash: 498769a7cb86)
 // 2-entry x 1-bit synchronous FIFO
 //

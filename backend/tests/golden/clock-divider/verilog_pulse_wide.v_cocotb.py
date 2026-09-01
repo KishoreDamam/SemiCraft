@@ -1,4 +1,4 @@
-# SemiCraft v0.3.0
+# SemiCraft v0.4.0
 # cocotb testbench for clock_divider (config hash: eb16677d0086)
 # BETA: the SystemVerilog testbench is the supported default backend.
 #

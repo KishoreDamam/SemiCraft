@@ -1,4 +1,4 @@
-// SemiCraft v0.3.0
+// SemiCraft v0.4.0
 // Testbench: sync_ram_tb (config hash: a97e5ce17e8a)
 // Smoke testbench (stub, compile-checked only) for sync_ram
 //

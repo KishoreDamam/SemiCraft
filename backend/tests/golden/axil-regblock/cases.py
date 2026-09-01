@@ -18,11 +18,23 @@ decode, not just a width:
   reserved-bit check is what keeps the module lint-clean.
 - ``reset_style`` — sync vs async skeleton. There is deliberately no polarity
   axis: AXI4-Lite fixes the reset active-low, so the option does not exist.
+
+A ``styled_names`` case pins the naming axis. Nothing covered it until P4-11,
+and three separate restyling bugs shipped behind that gap: assertion specs
+naming canonical resets (P3-05a), a hardcoded testbench clock net (P4-07), and
+datasheet port tables that never applied the name map at all. Every generated
+artifact resolves identifiers through ``build_name_map``; a case that changes
+every identifier is what makes a generator that forgot to visible.
 """
 
 from __future__ import annotations
 
 CASES: dict[str, dict] = {
+    # --- naming style (the axis no golden case covered until P4-11) ---------
+    "styled_names": {
+        "language": "sv",
+        "naming": {"convention": "camel", "prefix": "p_"},
+    },
     "defaults": {},
     # --- field layout --------------------------------------------------------
     "whole_word_fields": {"split_fields": False},

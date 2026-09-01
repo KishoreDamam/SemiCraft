@@ -1,4 +1,4 @@
-// SemiCraft v0.3.0
+// SemiCraft v0.4.0
 // Snippet: axil_uart (config hash: 596505f8263a)
 // AXI4-Lite UART, 8N1, reset divisor 4
 //

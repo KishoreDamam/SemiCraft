@@ -245,9 +245,16 @@ def test_i2c_bus_is_its_own_bundle() -> None:
 
 def test_generates_the_full_ip_file_set() -> None:
     res = generate_files("axil-i2c", {})
-    assert [f.kind for f in res.files] == ["rtl", "doc", "tb", "tb", "tb", "doc"]
-    # rtl, datasheet, SV TB, cocotb TB, verification scaffold, test plan.
+    assert [f.kind for f in res.files] == [
+        "rtl", "doc", "tb", "tb", "tb", "rtl", "doc"
+    ]
+    # rtl, datasheet, SV TB, cocotb TB, verification scaffold, example
+    # instantiation, test plan. The two `rtl` and two `doc` entries are
+    # distinguished by path, not kind (GeneratedFile.kind is frozen).
     assert [f.path for f in res.files if f.kind == "tb"][-1].endswith("_checks.sv")
+    assert [f.path for f in res.files if f.kind == "rtl"][-1].endswith(
+        ("_example.sv", "_example.v")
+    )
     doc = next(f.text for f in res.files if f.kind == "doc")
     assert "`CMD`" in doc and "`CLKDIV`" in doc
     assert set(axil_ports()) <= set(doc.split())  or "awvalid" in doc

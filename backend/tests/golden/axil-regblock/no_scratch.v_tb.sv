@@ -1,4 +1,4 @@
-// SemiCraft v0.3.0
+// SemiCraft v0.4.0
 // Testbench: axil_regblock_tb (config hash: bebd91f6383f)
 // Smoke testbench (stub, compile-checked only) for axil_regblock
 //

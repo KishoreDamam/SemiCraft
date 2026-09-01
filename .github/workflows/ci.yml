@@ -191,6 +191,14 @@ jobs:
         # every option case of all nine IPs, not just this file's.
         run: uv run pytest backend/tests/ips/test_verification_run.py -v
 
+      - name: Run example-instantiation lint gate (P4-11)
+        # Every IP's generated example, linted -Wall against the IP it
+        # instantiates. An example nobody compiles is the artifact-that-cannot-
+        # fail problem in its most user-visible form: a wrong port name in a
+        # copy-pasteable snippet is worse than no snippet, because a reader
+        # trusts it.
+        run: uv run pytest backend/tests/golden/test_example_lint.py -v
+
       - name: Run golden TB run gate (P3-03a, enforcing)
         # Executes each module's defaults smoke TB (SEMICRAFT_TB_RUN_ALL=1
         # for the full matrix). Went enforcing after the first advisory run

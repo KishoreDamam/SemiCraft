@@ -1,4 +1,4 @@
-// SemiCraft v0.3.0
+// SemiCraft v0.4.0
 // Snippet: axil_timer (config hash: 1463b2513a5c)
 // AXI4-Lite timer, 16-bit counter, 8-bit prescaler
 //

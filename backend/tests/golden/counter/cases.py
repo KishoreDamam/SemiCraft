@@ -10,11 +10,23 @@ Counter options (semicraft_core/snippets/counter.py, CounterOptions):
 ``width`` (default 8), ``direction`` (up/down/updown, default up), ``enable``
 (default True), ``wrap`` (overflow/saturate, default overflow), ``reset_value``
 (default 0), plus the common clocked fields ``reset_style``/``reset_polarity``.
+
+A ``styled_names`` case pins the naming axis. Nothing covered it until P4-11,
+and three separate restyling bugs shipped behind that gap: assertion specs
+naming canonical resets (P3-05a), a hardcoded testbench clock net (P4-07), and
+datasheet port tables that never applied the name map at all. Every generated
+artifact resolves identifiers through ``build_name_map``; a case that changes
+every identifier is what makes a generator that forgot to visible.
 """
 
 from __future__ import annotations
 
 CASES: dict[str, dict] = {
+    # --- naming style (the axis no golden case covered until P4-11) ---------
+    "styled_names": {
+        "language": "sv",
+        "naming": {"convention": "camel", "prefix": "p_"},
+    },
     "defaults": {},
     # --- single-option flips from default -----------------------------------
     "width_16": {"width": 16},

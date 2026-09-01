@@ -1,4 +1,4 @@
-// SemiCraft v0.3.0
+// SemiCraft v0.4.0
 // Snippet: lfsr (config hash: 869cdc1e3c02)
 // 8-bit Fibonacci LFSR, parallel output
 //

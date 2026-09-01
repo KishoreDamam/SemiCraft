@@ -1,4 +1,4 @@
-// SemiCraft v0.3.0
+// SemiCraft v0.4.0
 // Testbench: axil_spi_tb (config hash: aa053eee98ac)
 // Smoke testbench (stub, compile-checked only) for axil_spi
 //

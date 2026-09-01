@@ -1,4 +1,4 @@
-# SemiCraft v0.3.0
+# SemiCraft v0.4.0
 # cocotb testbench for gray_counter (config hash: 725624df68ef)
 # BETA: the SystemVerilog testbench is the supported default backend.
 #

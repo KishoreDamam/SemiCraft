@@ -1,4 +1,4 @@
-# SemiCraft v0.3.0
+# SemiCraft v0.4.0
 # cocotb testbench for rr_arbiter (config hash: 6f71aaf7819d)
 # BETA: the SystemVerilog testbench is the supported default backend.
 #

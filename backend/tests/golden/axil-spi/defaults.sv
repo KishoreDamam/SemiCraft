@@ -1,4 +1,4 @@
-// SemiCraft v0.3.0
+// SemiCraft v0.4.0
 // Snippet: axil_spi (config hash: 3bc5b88d24c6)
 // AXI4-Lite SPI master, mode 00
 //

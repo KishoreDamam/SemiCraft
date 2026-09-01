@@ -1,4 +1,4 @@
-# SemiCraft v0.3.0
+# SemiCraft v0.4.0
 # cocotb testbench for sync_fifo (config hash: ca906f6a8e24)
 # BETA: the SystemVerilog testbench is the supported default backend.
 #

@@ -1,4 +1,4 @@
-// SemiCraft v0.3.0
+// SemiCraft v0.4.0
 // Snippet: clock_divider (config hash: 5e6fb15227f9)
 // Clock divider by 10 (toggle output)
 //

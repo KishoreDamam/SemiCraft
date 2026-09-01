@@ -1,4 +1,4 @@
-// SemiCraft v0.3.0
+// SemiCraft v0.4.0
 // Snippet: axil_regblock (config hash: 358a5e2ca408)
 // AXI4-Lite register block, 64-bit data, 5 register(s)
 //

@@ -1,4 +1,4 @@
-// SemiCraft v0.3.0
+// SemiCraft v0.4.0
 // Testbench: axil_timer_tb (config hash: 60dfc6337525)
 // Smoke testbench (stub, compile-checked only) for axil_timer
 //

@@ -1,4 +1,4 @@
-// SemiCraft v0.3.0
+// SemiCraft v0.4.0
 // Snippet: demux (config hash: c02213bdc49f)
 // 3-way demultiplexer, 8-bit data
 //
