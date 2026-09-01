@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.4.0
 // Testbench: clock_divider_tb (config hash: d7f7bec8fc93)
 // Smoke testbench (stub, compile-checked only) for clock_divider
 //
@@ -52,5 +52,9 @@ module clock_divider_tb;
         $display("SMOKE PASS: clock_divider");
         $finish;
     end
+
+    // Concurrent assertions (SVA)
+    clk_out_reset_value: assert property (@(posedge clk) $fell(rst) |-> clk_out == 1'd0)
+        else $fatal(1, "SVA FAIL: clk_out_reset_value");
 
 endmodule

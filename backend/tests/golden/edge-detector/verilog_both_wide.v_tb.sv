@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.4.0
 // Testbench: edge_detector_tb (config hash: 67441c12731d)
 // Smoke testbench (stub, compile-checked only) for edge_detector
 //
@@ -65,5 +65,9 @@ module edge_detector_tb;
         $display("SMOKE PASS: edge_detector");
         $finish;
     end
+
+    // Concurrent assertions (SVA)
+    pulse_reset_value: assert property (@(posedge clk) $rose(rst_n) |-> pulse == 4'd0)
+        else $fatal(1, "SVA FAIL: pulse_reset_value");
 
 endmodule

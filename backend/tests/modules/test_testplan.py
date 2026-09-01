@@ -147,7 +147,7 @@ def _basic_spec(**overrides) -> TbSpec:
 def test_module_yields_testplan_as_second_doc_file() -> None:
     res = generate_files("edge-detector", {})
     kinds = [f.kind for f in res.files]
-    assert kinds == ["rtl", "doc", "tb", "doc"]
+    assert kinds == ["rtl", "doc", "tb", "tb", "doc"]  # second tb = cocotb (P3-08)
     doc_files = [f for f in res.files if f.kind == "doc"]
     assert doc_files[0].path == "edge_detector.md"  # datasheet stays first
     assert doc_files[1].path == "edge_detector_testplan.md"

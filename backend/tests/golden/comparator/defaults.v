@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.4.0
 // Snippet: comparator (config hash: c3a9b34bbffc)
 // 8-bit unsigned comparator (eq, lt, gt)
 //

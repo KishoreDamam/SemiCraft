@@ -34,10 +34,12 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from .example import example_filename
 from .ir.nodes import Module
 from .license import DISCLAIMER
 from .modules.contract import PortGroup
 from .render import StyleOptions, render
+from .render.style import build_name_map
 from .snippets import registry
 from .version import VERSION
 
@@ -49,12 +51,29 @@ __all__ = [
     "GenerateFilesResult",
     "generate_files",
     "EMIT_TB",
+    "EMIT_COCOTB_TB",
+    "EMIT_CHECKS",
 ]
 
 # Smoke-TB emission is feature-flagged OFF until P2-13 lands the TB generator
 # that consumes ``ModuleDef.tb_spec``. When P2-13 arrives it flips this to True
 # and adds the ``tb`` file to ``generate_files`` (see the guard there).
 EMIT_TB = True
+
+# cocotb testbench emission (P3-08, beta). Enabled: the backend is exercised by
+# a real run gate (backend/tests/tb/test_cocotb_run.py executes the generated
+# Python against the generated RTL under Verilator), so shipping it dormant
+# would hide working code rather than protect users. "Beta" here means the SV
+# testbench remains the supported default and the one every golden gate runs;
+# the emitted Python says so in its own banner. Set False to omit the file.
+EMIT_COCOTB_TB = True
+
+# Verification-scaffold emission (P4-09). Enabled: the scaffolds are attached
+# with SystemVerilog `bind` and proven able to *fail* a broken DUT by the
+# mutation half of backend/tests/ips/test_verification_run.py. SV only - `bind`
+# is not Verilog-2001 - so a Verilog build silently gets no scaffold file.
+# Set False to omit the file.
+EMIT_CHECKS = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -234,13 +253,46 @@ def _render_rtl(item, opts, chash: str) -> tuple[str, str, str, Module]:
     return path, code, language, module
 
 
-def _md_port_table(port_groups: list[PortGroup], explanation) -> list[str]:
+def resolve_doc_port_name(
+    doc_name: str, canonical: set[str], rename
+) -> str:
+    """The rendered net a datasheet's declared port name refers to.
+
+    ``port_groups()`` and ``ExplanationDoc.signals`` list canonical IR port
+    names **except** for an active-low reset, which each module's own helper
+    suffixes with ``_n`` — a documentation-only convention that P3-07's test-plan
+    generator already accommodates and documents (see
+    ``testplan._port_coverage_table``). So a doc name resolves canonically when
+    it is one, and otherwise by stripping that one suffix.
+
+    Falling back to the name unchanged is deliberate: a doc naming something
+    that is not a port at all (an internal signal an ``ExplanationDoc``
+    mentions) is passed through rather than mangled.
+    """
+    if doc_name in canonical:
+        return rename(doc_name)
+    if doc_name.endswith("_n") and doc_name[:-2] in canonical:
+        return rename(doc_name[:-2])
+    return doc_name
+
+
+def _md_port_table(port_groups: list[PortGroup], explanation, rtl_module, rename) -> list[str]:
     """Render the grouped port table for the doc file from ``port_groups``.
 
-    Signal directions/descriptions come from the ExplanationDoc (keyed by name);
-    grouping and per-group descriptions come from ``port_groups``.
+    Signal directions/descriptions come from the ExplanationDoc (keyed by the
+    *declared* name); grouping and per-group descriptions come from
+    ``port_groups``; the name actually printed is the **rendered** one.
+
+    That last part was missing until P4-11. The table printed declared names
+    verbatim, so under any naming convention, prefix or suffix the datasheet
+    listed ports that do not exist in the generated RTL — for every module and
+    every IP, at every configuration except the default. No golden case set a
+    naming style, so nothing could see it. This is the third bug of that exact
+    shape in this project (P3-05a's assertion specs, P4-07's hardcoded TB clock
+    net), which is why a styled-names golden case landed alongside the fix.
     """
     by_name = {s.name: s for s in explanation.signals}
+    canonical = {p.name for p in rtl_module.ports}
     lines: list[str] = []
     for group in port_groups:
         lines.append(f"### {group.name}")
@@ -253,14 +305,36 @@ def _md_port_table(port_groups: list[PortGroup], explanation) -> list[str]:
             sig = by_name.get(port_name)
             direction = sig.direction if sig else "input"
             desc = sig.description if sig else ""
-            lines.append(f"| `{port_name}` | {direction} | {desc} |")
+            display = resolve_doc_port_name(port_name, canonical, rename)
+            lines.append(f"| `{display}` | {direction} | {desc} |")
         lines.append("")
     return lines
 
 
-def _module_doc(item, opts, explanation, config_hash_value: str) -> str:
+def _module_doc(
+    item,
+    opts,
+    explanation,
+    config_hash_value: str,
+    interface_sections: list[str] | None = None,
+    timing_sections: list[str] | None = None,
+    rtl_module=None,
+    rename=None,
+) -> str:
     """Markdown datasheet for a module (Appendix A.3): title, purpose, port
-    table (grouped from ``port_groups``), configuration, assumptions/limitations."""
+    table (grouped from ``port_groups``), configuration, assumptions/limitations.
+
+    ``interface_sections`` are extra markdown lines inserted between the port
+    table and the configuration list. Empty for a module; an IP (Appendix B)
+    passes its register map and bus-interface sections there, so the whole
+    interface surface — ports, registers, bundles — stays together.
+
+    ``timing_sections`` (P4-10) follow them: the WaveDrom diagram of the
+    directed sequence. Placed after the static interface and before the
+    configuration list, because it describes how the interface *moves* — a
+    reader wants the port and register tables in hand before reading a
+    waveform of them.
+    """
     port_groups = item.port_groups(opts)
     lines: list[str] = [
         f"# {item.name}",
@@ -271,7 +345,9 @@ def _module_doc(item, opts, explanation, config_hash_value: str) -> str:
         "",
         "## Ports",
         "",
-        *_md_port_table(port_groups, explanation),
+        *_md_port_table(port_groups, explanation, rtl_module, rename or (lambda n: n)),
+        *(interface_sections or []),
+        *(timing_sections or []),
         "## Configuration",
         "",
     ]
@@ -288,12 +364,118 @@ def _module_doc(item, opts, explanation, config_hash_value: str) -> str:
     return "\n".join(lines)
 
 
+def _ip_interface_sections(item, opts, rtl_module) -> list[str]:
+    """Register-map + bus-interface datasheet sections for an IP (P4-01).
+
+    Also the enforcement point for :func:`~.ips.contract.check_bundles_against_module`:
+    the bundles are validated against the *generated* module before anything is
+    rendered from them, so a bundle naming a port the RTL does not have fails
+    generation loudly instead of producing a datasheet that documents a signal
+    nobody emits.
+    """
+    from .ips.bundles import restyle_bundles
+    from .ips.contract import check_bundles_against_module
+    from .ips.doc import bundles_md, register_map_md
+    from .render.style import build_name_map
+
+    bundles = list(item.bundles(opts))
+    # Validate the *canonical* declaration against the canonical IR module —
+    # both sides are pre-style, so this compares like with like.
+    check_bundles_against_module(rtl_module, bundles)
+
+    sections: list[str] = []
+    regmap = item.register_map(opts)
+    if regmap is not None:
+        sections.extend(register_map_md(regmap))
+
+    # ...then restyle for display, so the datasheet names the ports the RTL
+    # actually declares. See ips/bundles.restyle_bundles for why this step is
+    # not optional.
+    rename = build_name_map(rtl_module, _style_from_options(opts))
+    directions = {rename.get(p.name, p.name): str(p.dir) for p in rtl_module.ports}
+    sections.extend(bundles_md(restyle_bundles(bundles, rename), directions))
+    return sections
+
+
+def _ip_timing_section(item, opts, rtl_module) -> list[str]:
+    """WaveDrom timing section for an IP's datasheet (P4-10).
+
+    Derived from ``tb_spec`` — the recipe the smoke testbench executes — rather
+    than authored, so the diagram is verified by the same run gate that
+    verifies the RTL. An item with no ``tb_spec`` (or a combinational one) gets
+    no section rather than an invented one.
+    """
+    if not hasattr(item, "tb_spec"):
+        return []
+    from .render.style import build_name_map
+    from .tb.generate_tb import _param_values, _width_of
+    from .wavedrom import timing_diagram, timing_section_md
+
+    spec = item.tb_spec(opts)
+    params = _param_values(rtl_module)
+    widths = {p.name: _width_of(p.dtype, params) for p in rtl_module.ports}
+    names = build_name_map(rtl_module, _style_from_options(opts))
+    diagram = timing_diagram(
+        spec,
+        rtl_module,
+        widths,
+        lambda canonical: names.get(canonical, canonical),
+        title=f"{rtl_module.name} — directed sequence",
+    )
+    return timing_section_md(diagram)
+
+
+def _ip_example(item, opts, rtl_module, language: str, chash: str) -> str:
+    """Compilable example instantiation for an IP (P4-11).
+
+    Grouping and bundle annotations come from the IP's own metadata, restyled
+    through the same name map as everything else so the connections name the
+    ports the RTL declares.
+    """
+    from .example import example_module
+    from .ips.bundles import restyle_bundles
+    from .render.style import build_name_map
+    from .tb.generate_tb import _param_values, _width_of
+
+    params = _param_values(rtl_module)
+    widths = {p.name: _width_of(p.dtype, params) for p in rtl_module.ports}
+    names = build_name_map(rtl_module, _style_from_options(opts))
+
+    def rename(canonical: str) -> str:
+        return names.get(canonical, canonical)
+
+    # Resolve through the same convention the datasheet uses, so an active-low
+    # reset declared as `areset_n` lands in its own group rather than falling
+    # through to the ungrouped bucket at the end.
+    canonical = {p.name for p in rtl_module.ports}
+    groups = [
+        PortGroup(
+            name=g.name,
+            ports=[resolve_doc_port_name(p, canonical, rename) for p in g.ports],
+            description=g.description,
+        )
+        for g in item.port_groups(opts)
+    ]
+    return example_module(
+        rtl_module,
+        groups,
+        restyle_bundles(list(item.bundles(opts)), names),
+        widths,
+        rename,
+        language=language,
+        config_hash_value=chash,
+        description=item.explain(opts).purpose.split(".")[0] + ".",
+    )
+
+
 def generate_files(item_id: str, options: dict) -> GenerateFilesResult:
     """Generate the full file set for a catalog item (API v2, Appendix A.1/A.3).
 
     Snippets produce a single ``rtl`` file via the existing render pipeline.
-    Modules produce an ``rtl`` file plus a ``doc`` file (markdown datasheet from
-    the ExplanationDoc + port groups), a ``tb`` file (feature-flagged by
+    Modules — and IPs, which take the identical path (Appendix B) — produce an
+    ``rtl`` file plus a ``doc`` file (markdown datasheet from
+    the ExplanationDoc + port groups, plus register-map and bus-interface
+    sections for an IP), a ``tb`` file (feature-flagged by
     :data:`EMIT_TB`, built from ``ModuleDef.tb_spec``), and a second ``doc``
     file — a test-plan/verification-checklist document (P3-07,
     :func:`semicraft_core.testplan.generate_testplan`) appended *after* the
@@ -311,9 +493,27 @@ def generate_files(item_id: str, options: dict) -> GenerateFilesResult:
 
     explanation = item.explain(opts)
 
-    if registry.item_kind(item) == "module":
+    kind = registry.item_kind(item)
+    if kind in ("module", "ip"):
         doc_stem = rtl_path.rsplit(".", 1)[0]
-        doc_text = _module_doc(item, opts, explanation, chash)
+        # An IP (Appendix B) is a module plus register-map/bundle metadata, so
+        # it takes the identical path and only adds two datasheet sections.
+        interface_sections = _ip_interface_sections(item, opts, rtl_module) if kind == "ip" else []
+        # Timing diagram (P4-10), IPs only. Rendered from the same tb_spec the
+        # smoke testbench runs, so it cannot drift from verified behaviour -
+        # see semicraft_core/wavedrom.py.
+        timing = _ip_timing_section(item, opts, rtl_module) if kind == "ip" else []
+        doc_names = build_name_map(rtl_module, _style_from_options(opts))
+        doc_text = _module_doc(
+            item,
+            opts,
+            explanation,
+            chash,
+            interface_sections,
+            timing,
+            rtl_module,
+            lambda canonical: doc_names.get(canonical, canonical),
+        )
         files.append(GeneratedFile(path=f"{doc_stem}.md", kind="doc", text=doc_text))
 
         # Smoke TB (P2-13): SV testbench built from ModuleDef.tb_spec against
@@ -326,6 +526,73 @@ def generate_files(item_id: str, options: dict) -> GenerateFilesResult:
                 files.append(
                     GeneratedFile(path=f"{rtl_module.name}_tb.sv", kind="tb", text=tb_text)
                 )
+
+            # cocotb alternative backend (P3-08, beta). Same TbSpec recipe as
+            # the SV TB, emitted as Python. `kind="tb"` rather than a widened
+            # GeneratedFile.kind Literal: the Literal is a frozen contract
+            # (plan Appendix A.1) and the frontend's KIND_DOT is an exhaustive
+            # Record<FileKind, string>, so a new kind would break its build.
+            # The path distinguishes it, exactly as the datasheet/test-plan
+            # split does for two `doc` files.
+            if EMIT_COCOTB_TB:
+                from .tb.cocotb_tb import cocotb_tb_filename, generate_cocotb_tb
+
+                cocotb_text = generate_cocotb_tb(item, opts, rtl_module)
+                if cocotb_text:
+                    files.append(
+                        GeneratedFile(
+                            path=cocotb_tb_filename(rtl_module.name),
+                            kind="tb",
+                            text=cocotb_text,
+                        )
+                    )
+
+        # Verification scaffolds (P4-09): monitor + procedural checker modules
+        # plus the SystemVerilog `bind` statements that attach them inside the
+        # DUT. `kind="tb"` for the same reason the cocotb file is - the Literal
+        # is a frozen contract (plan Appendix A.1) - and the path distinguishes
+        # it, exactly as the datasheet/test-plan split does for two `doc` files.
+        #
+        # SV only: `bind` has no Verilog-2001 equivalent. Emitting a file that
+        # cannot compile under the language the user asked for would be worse
+        # than emitting nothing, and the checks are simulation artifacts, so a
+        # Verilog RTL build loses nothing it could have used.
+        if EMIT_CHECKS and language == "sv" and hasattr(item, "verification_spec"):
+            from .ips.verification import render_verification, verification_filename
+
+            names = build_name_map(rtl_module, _style_from_options(opts))
+            checks_text = render_verification(
+                item.verification_spec(opts),
+                rtl_module.name,
+                lambda canonical: names.get(canonical, canonical),
+            )
+            if checks_text:
+                files.append(
+                    GeneratedFile(
+                        path=verification_filename(rtl_module.name),
+                        kind="tb",
+                        text=checks_text,
+                    )
+                )
+
+        # Example instantiation (P4-11), IPs only. A second `rtl`-kind file,
+        # distinguished by path exactly as the two `doc` files and the three
+        # `tb` files are. Appended after the primary RTL, so the long-standing
+        # `next(f for f in files if f.kind == "rtl")` lookup keeps resolving to
+        # the IP itself.
+        #
+        # A real file rather than a fenced block in the datasheet, because the
+        # golden gate lints it with `-Wall` against the IP it instantiates: an
+        # example nobody compiles is the artifact-that-cannot-fail problem in
+        # its most user-visible form.
+        if kind == "ip":
+            files.append(
+                GeneratedFile(
+                    path=example_filename(rtl_module.name, language),
+                    kind="rtl",
+                    text=_ip_example(item, opts, rtl_module, language, chash),
+                )
+            )
 
         # Test-plan document (P3-07): a second `doc`-kind file appended after
         # the datasheet, derived entirely from ExplanationDoc/port_groups/

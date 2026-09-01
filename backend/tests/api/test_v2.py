@@ -36,7 +36,7 @@ def test_v2_catalog_has_required_shape_and_floor_count() -> None:
     for entry in items:
         for key in ("id", "name", "description", "kind", "maturity", "json_schema", "defaults"):
             assert key in entry, f"item {entry.get('id')} missing key {key!r}"
-        assert entry["kind"] in {"snippet", "module"}
+        assert entry["kind"] in {"snippet", "module", "ip"}
         assert entry["maturity"] in {"stable", "beta"}
 
 

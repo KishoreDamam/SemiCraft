@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.4.0
 // Snippet: debouncer (config hash: 3c18a68caccf)
 // Debouncer, 16777216-cycle period, active-high idle
 //

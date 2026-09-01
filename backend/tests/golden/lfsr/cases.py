@@ -11,11 +11,23 @@ LfsrOptions: ``width`` (Literal[4,8,16,24,32], default 8), ``init_value``
 (default 1), ``enable`` (default True), ``output_style`` (parallel/serial,
 default parallel), plus the common clocked fields ``reset_style``/
 ``reset_polarity``.
+
+A ``styled_names`` case pins the naming axis. Nothing covered it until P4-11,
+and three separate restyling bugs shipped behind that gap: assertion specs
+naming canonical resets (P3-05a), a hardcoded testbench clock net (P4-07), and
+datasheet port tables that never applied the name map at all. Every generated
+artifact resolves identifiers through ``build_name_map``; a case that changes
+every identifier is what makes a generator that forgot to visible.
 """
 
 from __future__ import annotations
 
 CASES: dict[str, dict] = {
+    # --- naming style (the axis no golden case covered until P4-11) ---------
+    "styled_names": {
+        "language": "sv",
+        "naming": {"convention": "camel", "prefix": "p_"},
+    },
     "defaults": {},
     # --- single-option flips from default, one per required width -----------
     "width_4": {"width": 4},

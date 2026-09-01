@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.4.0
 // Snippet: encoder (config hash: 4273c38c7ef3)
 // One-hot encoder, 4 inputs
 //

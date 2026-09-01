@@ -62,7 +62,14 @@ from .nodes import (
 )
 
 _INDENT = "    "
-_CLOCK_NAME = "clk"  # the styled clock net; drives WaitCycles edge expressions
+# The clock net name is threaded through the emitters from ``TbModule.clock``
+# rather than assumed. It used to be a module-level ``_CLOCK_NAME = "clk"``
+# constant, which was correct only because every default configuration renders
+# the clock as ``clk``: under any naming style with a prefix, suffix, or
+# camelCase conversion the DUT clock renders (say) ``p_clk`` while every
+# ``@(posedge clk)`` in the stimulus and the watchdog still said ``clk``, so the
+# emitted testbench did not compile at all. No golden case exercised a naming
+# style, so nothing caught it (P4-01, found by the reference IP's run gate).
 
 # ForkJoin.join discipline -> SystemVerilog join keyword (TB_SPEC §3.1).
 _JOIN_KEYWORD = {"all": "join", "any": "join_any", "none": "join_none"}
@@ -124,17 +131,20 @@ def _emit_dut(w: _Writer, dut: DutInstance) -> None:
     w.line(");")
 
 
-def _emit_block(w: _Writer, stmts: tuple[Stmt, ...], scope: str) -> None:
+def _emit_block(w: _Writer, stmts: tuple[Stmt, ...], scope: str, clock: str) -> None:
     """Emit ``stmts`` one indent level deeper (the body of a begin/end block)."""
     w.indent()
     for s in stmts:
-        _emit_stmt(w, s, scope)
+        _emit_stmt(w, s, scope, clock)
     w.dedent()
 
 
-def _emit_stmt(w: _Writer, s: Stmt, scope: str) -> None:
-    """Emit one statement. ``scope`` is the enclosing TB module name (the
-    ``$dumpvars`` scope for :class:`Dump`)."""
+def _emit_stmt(w: _Writer, s: Stmt, scope: str, clock: str) -> None:
+    """Emit one statement.
+
+    ``scope`` is the enclosing TB module name (the ``$dumpvars`` scope for
+    :class:`Dump`); ``clock`` is the *rendered* clock net name, used by every
+    edge-waiting construct."""
     if isinstance(s, TbComment):
         w.line(f"// {s.text}")
     elif isinstance(s, DriveSignal):
@@ -143,9 +153,9 @@ def _emit_stmt(w: _Writer, s: Stmt, scope: str) -> None:
         w.line(f"#{s.ns};")
     elif isinstance(s, WaitCycles):
         if s.n == 1:
-            w.line(f"@({s.edge} {_CLOCK_NAME});")
+            w.line(f"@({s.edge} {clock});")
         else:
-            w.line(f"repeat ({s.n}) @({s.edge} {_CLOCK_NAME});")
+            w.line(f"repeat ({s.n}) @({s.edge} {clock});")
     elif isinstance(s, ExpectSignal):
         w.line(f"if ({s.signal} !== {_lit(s.expected, s.width)}) begin")
         w.indent()
@@ -166,22 +176,22 @@ def _emit_stmt(w: _Writer, s: Stmt, scope: str) -> None:
         w.indent()
         for branch in s.branches:
             w.line("begin")
-            _emit_block(w, branch, scope)
+            _emit_block(w, branch, scope, clock)
             w.line("end")
         w.dedent()
         w.line(_JOIN_KEYWORD[s.join])
     elif isinstance(s, RepeatBlock):
         w.line(f"repeat ({s.count}) begin")
-        _emit_block(w, s.stmts, scope)
+        _emit_block(w, s.stmts, scope, clock)
         w.line("end")
     elif isinstance(s, IfTb):
         w.line(f"if ({s.condition_text}) begin")
-        _emit_block(w, s.then, scope)
+        _emit_block(w, s.then, scope, clock)
         if s.else_ is None:
             w.line("end")
         else:
             w.line("end else begin")
-            _emit_block(w, s.else_, scope)
+            _emit_block(w, s.else_, scope, clock)
             w.line("end")
     elif isinstance(s, TimeoutGuard):
         # Forked watchdog: a hung DUT fails loudly instead of stalling the sim.
@@ -197,7 +207,7 @@ def _emit_stmt(w: _Writer, s: Stmt, scope: str) -> None:
         w.line("static int watchdog_i;")
         w.line(
             f"for (watchdog_i = 0; watchdog_i < {s.cycles}; watchdog_i++) "
-            f"@(posedge {_CLOCK_NAME});"
+            f"@(posedge {clock});"
         )
         w.line(f'$fatal(1, "{s.message}");')
         w.dedent()
@@ -238,9 +248,9 @@ def _emit_reset_seq(w: _Writer, rs: ResetSeq, clock: str) -> None:
     w.line("end")
 
 
-def _emit_task(w: _Writer, task: Task, scope: str) -> None:
+def _emit_task(w: _Writer, task: Task, scope: str, clock: str) -> None:
     w.line(f"task {task.name};")
-    _emit_block(w, task.stmts, scope)
+    _emit_block(w, task.stmts, scope, clock)
     w.line("endtask")
 
 
@@ -252,10 +262,10 @@ def _emit_assert(w: _Writer, a: AssertProperty) -> None:
     w.dedent()
 
 
-def _emit_initial(w: _Writer, initial: Initial, scope: str) -> None:
+def _emit_initial(w: _Writer, initial: Initial, scope: str, clock: str) -> None:
     w.line("// Stimulus and self-checking assertions")
     w.line("initial begin")
-    _emit_block(w, initial.stmts, scope)
+    _emit_block(w, initial.stmts, scope, clock)
     w.line("end")
 
 
@@ -280,9 +290,9 @@ def render_tb(tb: TbModule) -> str:
         _emit_reset_seq(w, tb.reset_seq, tb.clock.signal)
     for task in tb.tasks:
         w.blank()
-        _emit_task(w, task, tb.name)
+        _emit_task(w, task, tb.name, tb.clock.signal)
     w.blank()
-    _emit_initial(w, tb.initial, tb.name)
+    _emit_initial(w, tb.initial, tb.name, tb.clock.signal)
     if tb.asserts:
         w.blank()
         w.line("// Concurrent assertions (SVA)")

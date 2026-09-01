@@ -12,6 +12,7 @@ Not yet wired into ``generate_files`` — integration is a later WP. See
 """
 
 from .generate import generate_assertions
+from .restyle import restyle_spec
 from .spec import (
     AssertionItem,
     AssertionSpec,
@@ -26,6 +27,7 @@ from .spec import (
 
 __all__ = [
     "generate_assertions",
+    "restyle_spec",
     "AssertionSpec",
     "AssertionItem",
     "ResetContext",

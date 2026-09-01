@@ -59,9 +59,11 @@ def test_snippet_verilog_language_reported() -> None:
 def test_module_yields_rtl_doc_and_tb() -> None:
     res = generate_files("edge-detector", {})
     kinds = [f.kind for f in res.files]
-    # rtl, datasheet doc, tb, then the P3-07 test-plan doc appended last (the
-    # datasheet stays the *first* doc entry — see test_module_doc_file_basics).
-    assert kinds == ["rtl", "doc", "tb", "doc"]
+    # rtl, datasheet doc, SV tb, cocotb tb (P3-08), then the P3-07 test-plan doc
+    # last. The datasheet stays the *first* doc entry and the SystemVerilog
+    # testbench the *first* tb entry, so `next(... kind == X)` lookups elsewhere
+    # keep resolving to the default backend.
+    assert kinds == ["rtl", "doc", "tb", "tb", "doc"]
     assert EMIT_TB  # TB emission enabled by P2-13
     tb = next(f for f in res.files if f.kind == "tb")
     assert tb.path == "edge_detector_tb.sv"

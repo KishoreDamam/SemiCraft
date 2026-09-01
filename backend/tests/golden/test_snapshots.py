@@ -35,7 +35,10 @@ from semicraft_core.generate import generate_files
 from .conftest import GoldenCase, discover_golden_cases, golden_case_id
 
 _CASES = discover_golden_cases()
-_MODULE_CASES = [c for c in _CASES if c.kind == "module"]
+# IPs (Appendix B) take the identical generate_files path as modules, so
+# they get the same doc/tb/testplan snapshots. Filtering on "module"
+# alone would have silently skipped every IP golden.
+_MODULE_CASES = [c for c in _CASES if c.kind in ("module", "ip")]
 
 
 @pytest.mark.parametrize("case", _CASES, ids=[golden_case_id(c) for c in _CASES])
@@ -145,6 +148,137 @@ def test_snapshot_testplan(case: GoldenCase, request: pytest.FixtureRequest) -> 
         f"generated testplan for {case.snippet_id}/{case.case_name} "
         f"[{case.language}] no longer matches {path}. If intentional, "
         "regenerate with --update-golden and review the diff."
+    )
+
+
+@pytest.mark.parametrize(
+    "case", _MODULE_CASES, ids=[golden_case_id(c) for c in _MODULE_CASES]
+)
+def test_snapshot_cocotb(case: GoldenCase, request: pytest.FixtureRequest) -> None:
+    """Snapshot the cocotb testbench (P3-08) — the second ``tb``-kind file.
+
+    Located by suffix, not by "the tb file": that lookup resolves to the
+    SystemVerilog testbench, which stays the default backend and the one the
+    compile/run gates exercise.
+    """
+    result = generate_files(case.snippet_id, case.resolved_options)
+    cocotb_file = next((f for f in result.files if f.path.endswith(".py")), None)
+    if cocotb_file is None:
+        pytest.skip(
+            f"no cocotb tb for {case.snippet_id}/{case.case_name} — either the "
+            "module has no clock, or semicraft_core.generate.EMIT_COCOTB_TB is "
+            "False. Not a regression."
+        )
+    assert cocotb_file.kind == "tb"
+
+    update = request.config.getoption("--update-golden")
+    path = case.cocotb_snapshot_path
+
+    if update:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(cocotb_file.text.encode("utf-8"))
+        return
+
+    if not path.is_file():
+        pytest.skip(
+            f"no committed cocotb golden at {path} yet. Run --update-golden "
+            "locally, review the diff, and commit to turn this into a gate."
+        )
+
+    expected = path.read_bytes()
+    actual = cocotb_file.text.encode("utf-8")
+    assert actual == expected, (
+        f"generated cocotb tb for {case.snippet_id}/{case.case_name} "
+        f"[{case.language}] no longer matches {path}. If intentional, "
+        "regenerate with --update-golden and review the diff."
+    )
+
+
+@pytest.mark.parametrize(
+    "case", _MODULE_CASES, ids=[golden_case_id(c) for c in _MODULE_CASES]
+)
+def test_snapshot_example(case: GoldenCase, request: pytest.FixtureRequest) -> None:
+    """Snapshot the example instantiation (P4-11) — the second ``rtl``-kind file.
+
+    Located by suffix, not by "the rtl file": that lookup resolves to the IP
+    itself, which every other gate depends on. Absent for modules (only IPs
+    emit one), which is a skip rather than a failure.
+    """
+    result = generate_files(case.snippet_id, case.resolved_options)
+    example = next((f for f in result.files if "_example." in f.path), None)
+    if example is None:
+        pytest.skip(
+            f"no example instantiation for {case.snippet_id}/{case.case_name} — "
+            "the item is not an IP. Not a regression."
+        )
+    assert example.kind == "rtl"
+
+    update = request.config.getoption("--update-golden")
+    path = case.example_snapshot_path
+
+    if update:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(example.text.encode("utf-8"))
+        return
+
+    if not path.is_file():
+        pytest.skip(
+            f"no committed example golden at {path} yet. Run --update-golden "
+            "locally, review the diff, and commit to turn this into a gate."
+        )
+
+    expected = path.read_bytes()
+    actual = example.text.encode("utf-8")
+    assert actual == expected, (
+        f"generated example for {case.snippet_id}/{case.case_name} "
+        f"[{case.language}] no longer matches {path}. If intentional, "
+        "regenerate with --update-golden and review the diff."
+    )
+
+
+@pytest.mark.parametrize(
+    "case", _MODULE_CASES, ids=[golden_case_id(c) for c in _MODULE_CASES]
+)
+def test_snapshot_checks(case: GoldenCase, request: pytest.FixtureRequest) -> None:
+    """Snapshot the verification scaffold (P4-09) — the third ``tb``-kind file.
+
+    Located by suffix for the same reason the cocotb snapshot is: "the tb file"
+    resolves to the SystemVerilog testbench. Absent for modules (only IPs
+    attach a scaffold) and for Verilog builds (`bind` is SV-only), which is a
+    skip, not a failure.
+    """
+    result = generate_files(case.snippet_id, case.resolved_options)
+    checks_file = next(
+        (f for f in result.files if f.path.endswith("_checks.sv")), None
+    )
+    if checks_file is None:
+        pytest.skip(
+            f"no verification scaffold for {case.snippet_id}/{case.case_name} — "
+            "the item attaches no verification_spec, the build is Verilog, or "
+            "semicraft_core.generate.EMIT_CHECKS is False. Not a regression."
+        )
+    assert checks_file.kind == "tb"
+
+    update = request.config.getoption("--update-golden")
+    path = case.checks_snapshot_path
+
+    if update:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(checks_file.text.encode("utf-8"))
+        return
+
+    if not path.is_file():
+        pytest.skip(
+            f"no committed scaffold golden at {path} yet. Run --update-golden "
+            "locally, review the diff, and commit to turn this into a gate."
+        )
+
+    expected = path.read_bytes()
+    actual = checks_file.text.encode("utf-8")
+    assert actual == expected, (
+        f"generated verification scaffold for {case.snippet_id}/"
+        f"{case.case_name} [{case.language}] no longer matches {path}. If "
+        "intentional, regenerate with --update-golden and review the diff."
     )
 
 

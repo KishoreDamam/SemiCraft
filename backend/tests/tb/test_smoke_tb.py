@@ -90,11 +90,14 @@ def test_active_high_reset_sequence() -> None:
 
 def test_verilog_dut_gets_sv_tb_with_correct_instance() -> None:
     res = generate_files("pwm", {"language": "verilog"})
-    paths = {f.kind: f.path for f in res.files}
-    assert paths["rtl"].endswith(".v")
-    assert paths["tb"].endswith("_tb.sv")
-    tb = next(f.text for f in res.files if f.kind == "tb")
-    assert "pwm dut (" in tb
+    # Select by suffix, not by a {kind: path} dict: two files now share
+    # kind="tb" (the SV testbench and the P3-08 cocotb one), and a dict
+    # comprehension keyed on kind silently keeps only the last of them.
+    rtl = next(f for f in res.files if f.kind == "rtl")
+    sv_tb = next(f for f in res.files if f.kind == "tb" and f.path.endswith("_tb.sv"))
+    assert rtl.path.endswith(".v")
+    # A .v DUT still gets a SystemVerilog testbench (TB_SPEC §6).
+    assert "pwm dut (" in sv_tb.text
 
 
 # --------------------------------------------------------------------------- #

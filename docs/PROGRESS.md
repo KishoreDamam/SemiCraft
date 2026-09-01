@@ -1,6 +1,6 @@
 # SemiCraft Progress Tracker
 
-Updated: 2026-07-29. Keep current — this file is the session-handoff state.
+Updated: 2026-08-20. Keep current — this file is the session-handoff state.
 
 ## WP status
 
@@ -68,9 +68,15 @@ Updated: 2026-07-29. Keep current — this file is the session-handoff state.
 | P3-03 sim sandbox service | DONE, committed b25e693, pushed | POST /api/v2/simulate over run_smoke; status pass/fail/unavailable/no_tb/error; degrades to "unavailable" HTTP 200 (no Verilator locally); frontend Run button + SimPanel log viewer. 15 backend + 9 frontend tests; v2 additive |
 | P3-04 directed-TB generator | DONE, committed dae8057, pushed | per-port width/PortConstraint clamping (no-op → drives byte-identical); TimeoutGuard watchdog forked atop stimulus initial (budget (reset_cycles+n_cycles+16)*8, never fires on pass); expected values still only from TbSpec.checks; ResetSeq NOT adopted; inert assertion_spec hook (no SVA for current modules). All 165 TB goldens regenerated (watchdog-only diff, 0 RTL/doc change). 2456 tests green |
 | CI run-gate watch | DONE — CI GREEN on 482cd71 | first push (592000c) RED: all 165 TBs hit %Error-LIFETIME — watchdog `repeat` counter is automatic, may outlive join_none process under verilator --timing. Fixed (482cd71) with explicit `static int watchdog_i` for-loop (Verilator's own suggested fix); same posedge-count semantics. lint + tb-compile + tb-run all green |
-| P3-06 checker scaffolds | DONE, committed 960894f | standalone semicraft_core/checkers: monitor (passive sampler) / checker (procedural reset+stability+latency checks) / scoreboard (SV class, expected queue, report()). Directed, not UVM. NOT wired into generate_files — no golden changes. docs/CHECKERS.md. Emitted SV is NOT compile-verified (see next section: verilator IS available in Linux containers, so a compile gate for these is now cheap — do it when wiring lands) |
+| P3-06 checker scaffolds | DONE, committed 960894f | standalone semicraft_core/checkers: monitor (passive sampler) / checker (procedural reset+stability+latency checks) / scoreboard (SV class, expected queue, report()). Directed, not UVM. NOT wired into generate_files — no golden changes. docs/CHECKERS.md. Emitted SV is now COMPILE-VERIFIED (P3-06a): `tests/checkers/test_compile.py` runs all three families through `verilator --timing --lint-only` (11 tests, incl. a negative control so the gate can't rot into a no-op), wired into CI's lint-gate job. It caught a real defect on first run — the scoreboard-wrapper example in BOTH the golden fixture and docs/CHECKERS.md referenced `data` from push_expr/compare_expr without declaring it in `ScoreboardWrapper.ports`, emitting a module with an undeclared signal. Generator was correct; the examples were not. Both fixed |
 | P3-07 test-plan doc gen | DONE, committed 596d81c | semicraft_core/testplan.py -> `<module>_testplan.md` as a SECOND doc-kind file appended after the datasheet (datasheet stays files[]'s first doc entry, so `next(f for f in files if f.kind=="doc")` still resolves to it). 165 testplan goldens; all pre-existing rtl/doc/tb goldens byte-identical. Gap list (undriven inputs / unchecked outputs) reports "None found" on all current modules — verified genuinely true, and the logic has synthetic tests proving it fires both ways. docs/TESTPLAN.md |
-| Next | **P3-09 first — it now has a concrete bug list (see "Full TB run matrix" below), not just a release checklist.** Then P3-08 cocotb beta (dep P3-03) | 2-agent budget per session |
+| P3-06a checker compile gate | DONE, committed b38ca85 | see P3-06 row: closes the "never compiled" gap that WP shipped with |
+| P3-05a assertion restyle + first module | DONE, committed d9fc40c | `assertions/restyle.py`: module specs are written in CANONICAL names (`tb_spec(opts)` never sees the render style) and `generate_tb` now restyles them through the same name map as every other net. Without it an active-low reset — the DEFAULT — emitted `disable iff (!rst)` against a net rendered `rst_n`, i.e. the feature was broken out of the box. `when` antecedents stay opaque (renaming inside free text needs an SV parser); documented + asserted as a limitation |
+| P3-05b remaining five modules | DONE, committed c6a8fff | clock-divider, debouncer, edge-detector, lfsr, rr-arbiter wired; every property derived from the RTL reset body and verified to HOLD in sim. rr-arbiter carries onehot0 on `grant` (its defining invariant). Deliberate exclusions, each pinned by a test: edge-detector `registered_output=False` (pulse is a continuous assign) and pwm entirely (only cnt is reset; pwm_out is combinational). Full matrix caught a width bug in this work: `pulse` is opts.width bits, not 1 — passed at default width, broke on wide configs |
+| P3-09 release v0.3.0 | DONE (prep) — NOT TAGGED, see below | VERSION 0.1.0 -> 0.3.0 and pyproject 0.1.0 -> 0.3.0. **v0.2.0 shipped with VERSION=0.1.0**: every artifact it generated stamped `// SemiCraft v0.1.0`. Nothing caught it because VERSION is not part of config_hash, so no golden or hash moved. Guarded now by `backend/tests/release/test_version_consistency.py`, which ties VERSION + pyproject to the newest `# SemiCraft vX.Y.Z` heading in RELEASE_CHECKLIST.md (a file, so it works in a shallow clone / before the tag exists). All 876 goldens regenerated: banner-only diff, 149 config hashes byte-identical. RELEASE_CHECKLIST.md gains a v0.3.0 section incl. an explicit "Deliberate gaps" list |
+| P3-06 wiring analysis | BLOCKED ON A DESIGN FINDING — see "Checker wiring" section below. Short version: for the *current* catalog the checker families duplicate the SVA wired in P3-05b, and the one non-duplicate family is fragile on its only candidate module. Recommend deferring to Phase 4 IPs | evidence recorded below |
+| P3-08 cocotb beta | DONE | `tb/cocotb_tb.py` emits `test_<module>.py` as a SECOND tb-kind file (path-distinguished, NOT a widened GeneratedFile.kind — frozen contract + frontend `Record<FileKind,string>` build break). Same TbSpec, same name map, same reset settle (TB_SPEC §6a) as the SV backend; a test asserts both backends emit identical expected values. **Pinned cocotb==1.9.2**: cocotb 2.0.1's Verilator VPI shim calls `VerilatedVpi::doInertialPuts()`/`evalNeeded()`, absent from Verilator 5.020 (newest in apt) — verified by spike, it fails in make. All 7 modules RUN green (~70s); 165 goldens; docs/COCOTB.md | 45 unit + 7 run tests |
+| Next | Phase 3 COMPLETE. Work moved to **Phase 4** — see its section below | 2-agent budget per session |
 
 ## Full TB run matrix — 17 pre-existing failures (found + fixed 2026-07-29)
 
@@ -138,8 +144,696 @@ an expectation fitted to a buggy sim silently freezes the bug, and here it also
 misdirected the follow-up diagnosis. `clock_divider.py`'s comment now says the
 checks are derived, not observed.
 
-**CI gap that hid all of this:** `test_tb_run.py` defaults to the `defaults`
-case per module; `SEMICRAFT_TB_RUN_ALL=1` runs the full 165-case matrix
-(~20 min). Making the full matrix a nightly/manually-dispatchable CI job is the
-open recommendation — a per-push job would add ~20 min to every push, which is a
-cost decision for the user, not a silent change.
+**CI gap that hid all of this — now closed.** `test_tb_run.py` defaults to the
+`defaults` case per module; `SEMICRAFT_TB_RUN_ALL=1` runs the full 165-case
+matrix (~20 min). Per user decision (2026-07-29), the full matrix now runs as
+its own workflow — `.github/workflows/tb-matrix.yml`, nightly at 03:17 UTC plus
+`workflow_dispatch` — rather than on every push, so regressions surface within a
+day without adding ~20 min to the normal loop. It lives in a separate workflow
+file on purpose: adding a `schedule:` trigger to `ci.yml` would have run *every*
+job in it nightly.
+
+## Checker wiring — deferred, with evidence (2026-07-29)
+
+The plan says to wire P3-06's checker/monitor/scoreboard scaffolds into
+`generate_files` alongside the assertions. Assertions landed (P3-05a/b). For
+checkers, inspecting what they would actually add to the **current** catalog
+argues for deferring rather than wiring:
+
+**1. Two of the three check families duplicate the SVA just wired.** Their own
+docstrings say so. `ResetValueCheck` is "distinct from
+`assertions.spec.ResetKnownValue`" only in being *procedural* rather than
+concurrent; `StabilityCheck` is the "procedural analogue" of `Stability` and its
+docstring calls its reset guard "a weaker approximation than SVA". Attaching
+them to the 7 current modules would emit a second, weaker copy of checks that
+already run — including duplicate failure messages for a single real defect.
+
+**2. The one non-duplicate family is fragile on its only candidate.**
+`LatencyCheck` has no SVA counterpart, but no current module has a valid/ready
+handshake. The nearest fit is rr-arbiter (`req` -> `grant_valid`), and the
+emitted state machine arms on `request` and evaluates `response` on the
+*following* edge. That works for `grant_style="registered"`, but for
+`"combinational"` the grant is asserted in the *same* cycle as `req` and is gone
+by the time the checker looks — a spurious failure. Making it correct would mean
+a per-grant_style max_cycles and a same-cycle-response mode in the generator.
+
+**3. Monitors and scoreboards need a transaction to be interesting.** A monitor
+over a 1-bit `d`/`pulse` pair prints a line per cycle; a scoreboard needs
+expected-vs-actual *transactions*, which these dataflow modules do not have.
+
+**Where they do pay off: Phase 4 IPs.** FIFO, UART, SPI, I2C and the AXI-Lite
+register block have real valid/ready handshakes (LatencyCheck, and the
+`Handshake` SVA family), real transactions (monitor + scoreboard), and
+request/response latencies worth bounding. P4-09 ("per-IP verification scaffold")
+is the natural home, and by then P3-06's generators are compile-gated and ready.
+
+**What is already done and not blocked by this:** the scaffolds generate, are
+compile-verified in CI (P3-06a), and are documented. The gap is only that no
+module *attaches* one — deliberately, per the above.
+
+**If wiring is wanted anyway**, the mechanism is roughly: a `checker_spec` field
+on `TbSpec` mirroring `assertion_spec`; a `restyle` for `CheckerSpec` (module
+specs are canonical, same reason as assertions — P3-05a); emission as
+`kind="tb"` at `<module>_checker.sv` (NOT a widened `GeneratedFile.kind` — that
+is a frozen-contract change *and* breaks the frontend, whose `KIND_DOT` is an
+exhaustive `Record<FileKind, string>`); an additive `checkers` field on
+`TbModule` so the TB instantiates it (an un-instantiated checker file compiles
+but verifies nothing — the exact "artifact that exists but does not run" pattern
+this session kept finding); and both golden gates extended to pass the checker
+file as an extra Verilator source.
+
+## Phase 4 (started 2026-08-20)
+
+| WP | Status | Notes |
+|---|---|---|
+| P4-01 IpDef contract | DONE | `semicraft_core/ips/`: `IpDef` (a strict superset of `ModuleDef` — an IP is a module plus `register_map(opts)` and `bundles(opts)`), the register-map model (`RegisterField`/`Register`/`RegisterMap`, rules R1–R6), bus-side `PortBundle`s over **flat** ports (no SV `interface` — locked decision), the two datasheet sections, and `check_bundles_against_module` (rules B1–B4) run during generation. Registry discovers a third catalog package; `by_kind("ip")` is empty until P4-02. Contract frozen in plan **Appendix B**; author guide `docs/IPS.md`. 91 tests in `backend/tests/ips/` (6 of them Verilator runs) |
+| P4-02 AXI4-Lite regblock | DONE | `ips/regblock.py`: `build_axil_regblock(name, regmap, ...)` — a plain function over **any** register map, so P4-05..08 splice it in as their bus frontend rather than subclassing a catalog entry. Single-outstanding target, independent AW/W capture, exact byte-strobe merge, registered reads, per-access-type field semantics. `ips/axil_regblock.py` is the first shipped IP (`axil-regblock`). 8 golden cases x 2 languages; every one lints `-Wall` clean, compiles and runs green |
+| P4-03a sync FIFO | DONE | `ips/sync_fifo.py`: power-of-two depth, wrap-bit pointers giving exact full/empty/count, registered reads, overflow/underflow ignored. **First consumer of the IR `Memory` node** (spec'd since IR v0.2, never emitted by any generator). Exercises the two `IpDef` branches the regblock could not: `register_map -> None`, and two bundles sharing one clock. 9 golden cases x 2 languages, all lint-clean, compiled and run |
+| P4-03b async FIFO | BLOCKED — see below | needs a two-clock testbench; a tied-clock TB would verify the FIFO logic and nothing about the CDC |
+| P4-04a sync RAM | DONE | `ips/ram.py`: single-port and simple dual-port synchronous RAM. **No reset at all** (storage must not be cleared; resetting only the output register is what blocks block-RAM inference), so it extends `CommonOptions` not `ClockedOptions` and `TbSpec.reset is None`. Read-during-write returns OLD data (READ_FIRST), pinned by a directed check and by a write-first mutation in the run gate. 7 golden cases x 2 languages |
+| P4-04b ROM | BLOCKED — see below | needs memory initialisation, which the synthesizable IR does not express; two routes, both needing a recorded IR decision first |
+| P4-05a composition + GPIO | DONE | `build_axil_regblock(..., field_ports=False)` emits the hardware face as internal signals, so a peripheral splices the register block into its own module — one flat module, no submodule instantiation. Standalone goldens byte-identical. `AxilSequencer`/`RegisterModel` promoted into `regblock.py` so composed IPs share the AXI timing. First composed IP: `axil-gpio` (DIR/OUT/IN + input synchroniser). 7 golden cases x 2 languages |
+| P4-05b UART | DONE | `ips/axil_uart.py`: 8N1 UART, programmable baud divisor, TX/RX FSMs spliced onto the register block. Status flags are W1C (the block has no read-side effect); the transmit trigger is the register write strobe, delayed one cycle. 7 golden cases x 2 languages |
+| P4-06 SPI master | DONE | `ips/axil_spi.py`: full-duplex 8-bit MSB-first master, all four CPOL/CPHA modes as generate-time options, programmable divider, manual chip select. CPHA=1 narrows the receive register to 7 bits (the last sample goes straight to RXDATA) — found by the `-Wall` gate. 8 golden cases x 2 languages |
+| frontend CI | DONE | the frontend had 172 tests, a build and an eslint config and **no CI job ran any of them** — the gap that let a broken `npm ci` lockfile survive. All four commands verified locally before wiring |
+| P4-07 I2C master | DONE | `ips/axil_i2c.py`: open-drain master (pull-down enables + sensed levels, no `inout`), START/STOP/byte primitives via CMD, ACK/NACK, **clock stretching** with the testbench stretching deliberately. Bus drivers are continuous functions of registered state, not FSM side effects. 7 golden cases x 2 languages |
+| P4-08 timer + intc | DONE | `ips/axil_timer.py`: prescaled **down**-counter (zero test instead of a full-width comparator), one-shot or periodic, maskable level `irq`. One-shot stops via an internal `running` flop because `CTRL.enable` is an `rw` field only software can write. `ips/axil_intc.py`: `num_irq` sources, **mask on the output not on the latch** (a request masked at arrival must still be findable when software enables it later), edge or level trigger as a generate-time option, edge history taken *after* the synchroniser. 7 + 9 golden cases x 2 languages |
+| P4-09 verification scaffold | DONE | The P3-06 monitor/checker generators, unattached since Phase 3, bound to all nine IPs. `checkers/bind.py` emits SystemVerilog **`bind`**, so no TB_SPEC / `TbModule` / `render_tb` change was needed and the generated testbench is byte-identical with or without a scaffold. `checkers/restyle.py` maps canonical names through the render name map (`areset` -> `areset_n` at the *default* configuration). New `tb`-kind file `<module>_checks.sv`, SV only. Checks liveness + read-data stability for the seven AXI IPs; read-hold for `sync-fifo`/`sync-ram` - deliberately not the reset values the SVA already covers. 58 new goldens |
+| P4-10 per-IP doc generator | DONE | `wavedrom.py`: a `## Timing` section on every IP datasheet, WaveDrom JSON inline in the markdown (`GeneratedFile.kind` is a frozen Literal and a `.json` is none of rtl/tb/doc - the same blocker as the ROM's `$readmemh`). **Rendered from the same `TbSpec` the smoke TB runs**, so the diagram is verified by the same run gate as the RTL and cannot drift. Unchecked cycles are drawn `x`, which makes it double as a directed-coverage picture. 129 doc goldens, all additions |
+| P4-11 examples + v0.4.0 | DONE (prep) — NOT TAGGED | `example.py`: `<module>_example.sv|.v` per IP, a second `rtl`-kind file, **lint-gated `-Wall` against the IP it instantiates** rather than printed into markdown. Connections grouped from `port_groups()`, annotated from `bundles()`. VERSION + pyproject 0.3.0 -> 0.4.0; RELEASE_CHECKLIST gains a v0.4.0 section incl. Deliberate gaps. All goldens regenerated: **banner-only diff, 588 config hashes byte-identical** |
+| doc naming fix | DONE | The datasheet's port table **never applied the render name map** — under any naming convention/prefix/suffix every module and every IP listed ports absent from the RTL. Shipped since v0.2.0. Third bug of this shape (P3-05a assertions, P4-07 TB clock). Root cause: **no golden case set a naming style**, so the axis was invisible. Fixed + a `styled_names` case added to all 26 catalog items |
+| Next | **Phase 4 is complete (13/13 WPs, 9 IPs).** Before Phase 5: open a PR so CI actually runs the P4 gates — `ci.yml` triggers on `main` and PRs only, so every gate added since P4-01 is locally-verified only — then tag **v0.3.0 and v0.4.0** on main. Then Phase 5 (subsystem generator), whose first need is a real **module-instance node in the IR** (an IR_SPEC decision); `example.py` emits instantiation as text and should be rewritten on top of that node, not duplicated. Still open: the **scoreboard family is unused** (the FIFO is where it belongs); async FIFO and ROM each need a recorded contract decision; wire cocotb into `POST /api/v2/simulate`; the full suite is ~80 min — moving the per-IP run gates to the nightly matrix is the obvious relief | 2-agent budget per session |
+
+### P4-01: the contract is proven by a real IP, not by its own docstrings
+
+A contract with no implementor is the same "documented, never executed" shape
+this project keeps finding defects in. So P4-01 ships a **test-only reference
+IP** (`backend/tests/ips/reference_ip.py`) — a two-register CSR block on a
+native bus — that goes through the entire pipeline: IR, both language
+renderers, the datasheet, the smoke TB, SVA, and a **Verilator compile+run
+gate over six configurations** (`backend/tests/ips/test_run.py`).
+
+It is deliberately *not* a catalog item: P4-02's AXI4-Lite register block is
+the first real IP, and shipping a throwaway CSR block first would mean golden
+files and a datasheet for something P4-02 immediately supersedes. Tests
+register it through the real registry, so it exercises no private back door.
+
+### Bug found by that run gate: every generated testbench was uncompilable under any non-default naming style
+
+`render_tb` held the clock net in a module-level `_CLOCK_NAME = "clk"`. That is
+right for every *default* configuration — the default style renders the clock
+port `clk` — but under any style with a prefix, suffix, or camelCase the DUT
+clock renders (say) `p_clk` while every `@(posedge clk)` in the stimulus and
+the watchdog still said `clk`. Verilator: `Can't find definition of variable:
+'clk'`. All 7 modules, both languages, shipped in v0.2.0 and v0.3.0.
+
+Why the 165-case golden matrix missed it: **no golden case sets a naming
+style**, so the whole matrix exercises only the one spelling the constant
+happened to match. The blind spot is naming, and it is the same shape as the
+P3-05a assertion-restyle bug — metadata written in canonical names, rendered
+without going through `build_name_map`.
+
+Fixed by threading `TbModule.clock.signal` through the emitters (TB_SPEC §7a,
+normative). Byte-identical at the default style, so **no golden file changed**
+— which is exactly why nothing failed for two releases. Regression cover in
+`tests/tb/test_directed_tb.py`: for every module under a prefix+camelCase
+style, the set of nets the TB waits on must be exactly the styled clock, and
+every such net must be declared.
+
+### Still open from the same blind spot (NOT fixed here)
+
+`generate._md_port_table` renders `PortGroup.ports` and `ExplanationDoc`
+signal names **raw**, so under a naming style the datasheet documents ports the
+RTL does not declare. Reproduced:
+
+```
+generate_files("gray-counter", {"naming": {"convention": "snake", "prefix": "p_"}})
+  RTL:  input logic p_clk, p_rst_n, p_en; output logic [WIDTH-1:0] p_gray
+  DOC:  | `clk` | | `rst_n` | | `en` | | `gray` |
+```
+
+Not fixed in P4-01 because the honest fix is not a display-time restyle: the 7
+modules *hand-render* the `_n` suffix in `port_groups`/`explain` (e.g.
+`gray_counter._reset_port_name`), so the name map — keyed on canonical `rst` —
+does not match `rst_n`, and a prefix style would still emit `rst_n` rather than
+`p_rst_n`. The fix is to make modules return canonical names and let
+`generate_files` restyle, which touches all 7 modules and their tests. It is a
+no-op at the default style (so no golden churn), and it is the same one-line
+lesson as above. Worth its own WP.
+
+P4-01's own new code does restyle correctly — `ips/bundles.restyle_bundles`,
+covered by a test that asserts the rendered bundle names match the RTL under a
+prefix+camelCase style.
+
+### P4-02: three departures from a textbook AXI4-Lite target, all forced by the lint gate
+
+This project lints every generated file with `verilator --lint-only -Wall` and
+requires `status == "clean"` — **zero** warnings. A module that declares an
+input it never reads fails. That single constraint drove three design
+decisions, and I think it drove them in the right direction:
+
+1. **No `awprot`/`arprot`.** A register block enforces no protection policy, so
+   those spec-required inputs would be dead logic. Suppressing the warning with
+   a lint pragma would have blinded the gate to genuine unused-signal bugs in
+   the same file.
+2. **The full byte address is decoded**, not just the word index — so the low
+   offset bits are used, and a misaligned access returns SLVERR instead of
+   silently aliasing onto the containing word.
+3. **Reserved bits must be written as zero** (SLVERR otherwise, with no
+   update). This is what makes every `wdata`/`wstrb` bit genuinely used no
+   matter how sparse the register map is. Verified against a deliberately
+   sparse map with no full-width writable field anywhere: `-Wall` clean in both
+   languages.
+
+The alternative — carving out a lint exception for IPs — would have weakened
+the gate for exactly the most complex generated code in the project.
+
+### The run gate is proved able to fail
+
+An AXI transaction sequence is the kind of test that can look thorough while
+proving nothing: drive some handshakes, check a response code, never actually
+exercise the behaviour. So `tests/ips/test_axil_regblock_run.py` has two
+halves — nine configurations that must pass, and **four deliberately broken
+generators that must fail**: byte strobes ignored, write-only fields leaking on
+read, the `w1c` hardware set dropped, the reserved-bit check disabled.
+
+Building that caught two real problems:
+
+- **A mutation that "passed".** Write-only readback was not covered, because
+  `command_regs` defaulted to 0 and the phase was guarded on having such a
+  register. The default configuration is what the standard CI run gate
+  executes, so the default now includes one of every access type — pinned by
+  `test_default_map_exercises_every_access_type`.
+- **A flawed harness.** My first mutation run patched `regblock`'s globals
+  before the registry had lazily imported `axil_regblock`, so the *reference
+  model* got mutated alongside the hardware and the two agreed. The fix (force
+  the import first) is in the test, with the reason, because the failure mode
+  looks exactly like a passing test.
+
+### Two more doc-vs-behaviour mismatches fixed on the way
+
+- The generic register-map datasheet renderer stated reserved bits "ignore
+  writes". This block **rejects** them with SLVERR. The renderer now describes
+  only what the *model* owns — reserved bits read as zero — and leaves write
+  policy to the generator, which states it in the IP's limitations.
+- `bresp` was computed from the address hit alone, so a write rejected by the
+  reserved-bit check still answered OKAY: the write silently vanished with a
+  success response. Caught by the M4 mutation and pinned by
+  `test_write_response_covers_both_error_causes`.
+
+### Also closed
+
+`test_cocotb_run.py` covered `by_kind("module")` only, so an IP's generated
+cocotb testbench was committed as a golden and never executed — the
+"artifact that exists but does not run" pattern again. It now covers IPs too.
+`test_snapshots.py` filtered golden doc/tb cases on `kind == "module"`, which
+would have silently skipped every IP golden.
+
+### P4-03a: the sync FIFO, and why the async FIFO is not here
+
+The plan pairs a synchronous FIFO with a gray-pointer asynchronous one. The
+sync FIFO shipped; the async FIFO is **deferred, with a concrete unblock
+path**, and the reason is the same one that has driven most of this project's
+decisions.
+
+The testbench framework drives **one** clock: `TbSpec.clock` is a single name
+and `TbModule` holds a single `ClockGen`. An async FIFO's defining property is
+safe transfer between two *independent* clocks. Tying both clocks together in
+the testbench would exercise the pointer and memory logic and **nothing** about
+the clock-domain crossing — while the datasheet claimed CDC safety. That is
+the "artifact that exists but does not run" pattern, and CDC bugs are exactly
+the class that cannot be caught by reading the RTL.
+
+Unblocking it is a TB-IR work package: a second clock on `TbSpec`, a clock
+selector on `WaitCycles`, and per-clock cycle anchoring for vectors and checks.
+That touches TB_SPEC, a frozen contract, so it needs a recorded decision first
+rather than a silent edit.
+
+### What the FIFO proved out beyond itself
+
+- **The IR `Memory` node had never been used.** Added in IR v0.2 (P2-02/03),
+  spec'd in IR_SPEC §10.2, unit-tested — and no generator ever emitted one, so
+  the render path was untried in a real module. It works: `logic [7:0] mem [8]`
+  in SystemVerilog, `reg [7:0] mem [0:15]` in Verilog-2001, both lint-clean.
+  Verified before building on it rather than after.
+- **`register_map -> None` and shared-clock bundles.** P4-01 declared both
+  branches; nothing demonstrated either until now. The datasheet correctly
+  omits the register-map section, and the `wr`/`rd` bundles share `clk`.
+
+### Keeping a deep FIFO's testbench small
+
+Filling a 1024-entry FIFO one driven cycle per entry would emit a testbench of
+thousands of lines — the shape that produced a 65k-line clock-divider TB and
+timed out the compile gate. The fill and drain phases instead hold their enable
+for a single driven cycle and then idle, which `generate_tb` coalesces into one
+`repeat (N)`. A 1024-deep FIFO's TB is under 400 lines, pinned by a test.
+
+### The run gate, again with a mutation half
+
+Four broken generators that must fail: flow control removed (`!full`/`!empty`
+guards neutered), read index taken from the write pointer, `full` stuck low,
+`empty` stuck low. All four are caught. A FIFO testbench that pushes a few
+words and pops them back is easy to write and proves almost nothing — the two
+properties that matter are boundary flow control and ordering, and those are
+what the mutations target.
+
+### P4-04: the RAM, and the two decisions it forced
+
+**No reset.** Storage must not be cleared — a deep memory's reset costs real
+logic for no observable behaviour — and resetting *only* the output register is
+what most often blocks block-RAM inference. So the module has a bare clock and
+its options extend `CommonOptions`, not `ClockedOptions`: reset style and
+polarity would be options with nothing to configure. This is the first IP with
+`TbSpec.reset = None`, which `generate_tb` already handled but nothing had
+exercised.
+
+The consequence is honest rather than hidden: `dout` holds no defined value
+until the first completed read (X in a four-state simulator, **zero** in
+Verilator). A test asserts the generated testbench never checks `dout` before
+a read completes, because doing so would encode one simulator's
+initialisation convention as a requirement of the design.
+
+**Read-during-write returns OLD data.** Both accesses are non-blocking in one
+process, so a same-address read-during-write yields the previous contents
+(READ_FIRST). This is the one RAM behaviour nothing in the port list reveals,
+so it gets a directed check *and* a `write_first_bypass` mutation in the run
+gate — in both single and dual-port mode. A generator that got it wrong would
+compile, lint clean, and pass any testbench that keeps writes and reads on
+separate cycles.
+
+### ROM: blocked on a contract decision, not on effort
+
+P4-04 pairs the RAM with a ROM, which is not here. A ROM is only useful if its
+contents are specified, and nothing available today can express that:
+
+- The **synthesizable IR has no memory-initialisation construct**.
+  `initial`/`$readmemh` belong to the testbench node family, which the
+  synthesizable validator rejects by design (TB_SPEC §1 separation rule).
+- The **options form has no array-of-integers widget**, so contents cannot
+  come from options either (the same constraint that made the AXI register
+  block take counts rather than a user-authored map).
+- A **case-statement lookup** works only for tiny depths — a 1024-entry ROM
+  would emit 1024 case arms.
+
+Two viable routes, each needing a recorded decision before any code:
+
+1. An additive `init_values` on `Memory`, rendered as an `initial` block.
+   FPGA-friendly; not portable to ASIC flows.
+2. A generated `.hex` file plus `$readmemh`. Portable, but
+   `GeneratedFile.kind` is a frozen Literal (`rtl`/`tb`/`doc`) and a data file
+   is none of those — so it is a frozen-contract change as well.
+
+Choosing between them is the first task of that work package. Guessing now and
+discovering the constraint later is how a frozen contract gets edited silently.
+
+### A test bug worth recording
+
+`test_read_enable_can_be_omitted` asserted `"re" not in sv`. That is true of
+almost no generated file: the license banner contains "Free". Fixed with a
+whole-identifier regex helper, and the same helper now guards the `rst`/`addr`
+absence checks in that file — a bare substring test for a short identifier is
+close to worthless against generated text.
+
+### P4-05a: prove the composition before betting a UART on it
+
+P4-05 is the UART, and its real prerequisite is the *composition* mechanism —
+a peripheral needs its own logic plus a register frontend, and nothing had ever
+spliced the register block into a larger module. So the mechanism landed first,
+proved on the simplest peripheral that can exercise it, rather than being
+debugged for the first time underneath a baud-rate generator.
+
+`build_axil_regblock(..., field_ports=False)` emits the hardware face as
+internal signals instead of ports; the peripheral appends its pins and logic
+and gets one flat module. Two obligations fall out of the `-Wall` gate: a
+composer must **use every field it declares** (an unused signal fails), and
+must **drive the read-only ones** (the block reads them; nothing else will).
+The standalone `axil-regblock` goldens are byte-identical, which is the check
+that the flag did not change the default path.
+
+`AxilSequencer` and `RegisterModel` moved into `regblock.py`, beside the
+generator whose timing they encode, so a composed IP's testbench cannot drift
+from the standalone block's.
+
+### The GPIO check that nearly did not work
+
+A synchroniser is invisible to an ordinary readback test: read `IN` after the
+pins settle and it passes whether the guard exists or not. So the testbench
+also reads `IN` while the value is still in flight and requires the **old**
+one.
+
+The first version of that check was placed wrong. A read issued in the *same*
+cycle as the pin change captures one edge later, which reads old even with no
+synchroniser at all — the `one_stage_short` mutation sailed straight through
+it. Delaying the read by one cycle is what makes it discriminate. Both
+mutations (bypass, and one stage instead of two) now fail as they should.
+
+Worth recording because a missing metastability guard is the classic defect
+that **never shows up in simulation**: the check has to be timed deliberately,
+and writing it by feel produced something that looked right and tested
+nothing.
+
+### P4-05b: the UART, and two things worth carrying forward
+
+**A strobe and its value are not available in the same cycle.** `TXDATA` is a
+write-only field: its storage holds the byte, but storage cannot say *when* a
+write happened. The register block already computes that —
+`write_strobe_name("TXDATA")` is high for exactly one cycle per accepted write
+— but `txdata_data` only takes the new byte on the same edge the strobe is
+sampled, so a transmitter triggered directly off the strobe would send the
+*previous* byte. The one-cycle delay is now documented as part of the
+composition contract, because every future peripheral with a command register
+hits it.
+
+**Read-to-clear was the obvious design and the wrong one.** The natural UART
+idiom is "reading RXDATA clears rx_valid", but the block's read path is a mux
+with no per-register read strobe. Adding one meant a new access type plus a
+signal on every register, for exactly one user. The flags are W1C instead —
+something the block already implements exactly, and a real UART interface in
+its own right. A contract stayed the size it was.
+
+### The test bytes were bit-palindromes
+
+The mutation gate includes "transmits MSB first", which leaves a perfectly
+well-formed frame behind. Writing it exposed that my chosen test bytes, `0xA5`
+and `0x3C`, both read the **same backwards** — a reversed transmitter would
+emit an identical frame and every check would pass. Changed to `0x4B`/`0x2D`,
+and a test now asserts the transmitted byte is not a palindrome.
+
+This is the same failure shape as the GPIO synchroniser check from P4-05a: a
+test that looks thorough, exercises the right signal, and cannot fail. Both
+were found only by trying to break the hardware on purpose.
+
+### Three test bugs of mine, all from guessing at the RTL
+
+`2'b00:` (the renderer emits minimal-width constants, `2'b0:`), slicing the
+*first* `if (!areset_n)` block when the UART has two clocked processes and its
+own is the second, and a `zip(..., strict=True)` over lists of different
+length. All three were assertions about output I had not looked at. Reading
+the generated RTL first would have avoided all of them.
+
+### P4-06: two timing lessons, both bought with a failing run
+
+**A flag set by peripheral logic is readable one cycle later than the event
+that set it.** The completing sclk edge raises the W1C *set request*; the
+register block latches it in its **own** always block, so the flag crosses a
+clock edge on the way to being readable. I collapsed "transfer done" and
+"status readable" into one cycle and every mode failed with
+`rdata expected 2, got 0`. This applies to every composed IP — the UART has the
+same structure and happened to have enough slack to hide it.
+
+**Check a level at the first cycle of a half period, not one cycle into it.**
+The original sclk check sat at `active + div + 1`, which is inside the first
+half period for any divisor above 1 and inside the *next* one at divisor 1. It
+passed everywhere except the fastest clock.
+
+The second fix is also a caution about fixing two things at once: correcting
+the sclk offset and moving the miso drive in the same edit turned 3 failures
+into 10, because the `+1` I removed was load-bearing for the *other* reason.
+Reading the failure values (`expected 2, got 0` — a status flag, not a clock
+level) is what separated them.
+
+### A mutation that ate itself
+
+`clock_never_toggles` was written as "call the real `_transfer_body` and drop
+the sclk assignment" — but it looked the function up through the module, which
+`monkeypatch` had just replaced with the mutation. It recursed until the
+interpreter gave up, and the traceback blamed the generator. The original is
+now captured at import time, with a comment saying why.
+
+### CPHA=1 needs a narrower receive register
+
+With CPHA=0 the last sample lands on edge 14, so all eight bits live in the
+shift register. With CPHA=1 the last sample *is* edge 15 and goes straight into
+RXDATA, so bit 7 of the register would be written and never read. The `-Wall`
+gate flagged it; the fix is a 7-bit register for that phase, which is smaller
+hardware as well as clean lint.
+
+### Frontend CI, finally
+
+I had flagged "no frontend CI job" in six consecutive handoffs without fixing
+it. It is now a real job — `npm ci`, lint, tests, production build — and all
+four commands were verified locally first. `npm ci` rather than `npm install`
+is deliberate: it fails on a lockfile that does not match `package.json`, which
+is the exact failure the job exists to catch.
+
+### P4-07: two bugs, and how each was found
+
+**The quarter counter kept counting while the clock was stretched.** The stall
+branch incremented `q_cnt` unconditionally, so it would wrap all the way round
+before `q_cnt == div-1` came true again — a 2**16-cycle hang. Only reachable
+*with* stretching, which is exactly why the testbench stretches instead of
+assuming a cooperative bus. Found while writing the stretch into the
+testbench, before the first run.
+
+**A guard named in a function's name is not a guard.** `_sample_at_phase2`
+never checked the phase: it sampled on every quarter, so a read shifted in
+four samples per bit. The write transaction passed anyway — its only sample is
+the ACK, and the slave holds SDA low across all four ACK quarters, so sampling
+four times gave the same answer. It took reading a byte back to expose it.
+
+And the read transaction only existed because **ruff flagged `rxdata` as
+assigned but never used** — my own docstring said "write a byte, then read one
+back" while the testbench only ever wrote. The lint error was the thing that
+noticed the docstring was lying.
+
+### Why the bus drivers are combinational
+
+An I2C bit is four quarter-phases and there are five states, so the sequential
+form is twenty little bundles of side effects, each of which has to set SCL and
+SDA correctly on entry. As continuous functions of the registered state they
+change only just after a clock edge — no glitch risk — and each line's whole
+behaviour reads in one expression, which is what made `_expected_drive` in the
+testbench writable as an independent restatement rather than a copy.
+
+### P4-08: the timer and the interrupt controller, and what each mutation had to attack
+
+Two IPs, one work package, sharing nothing but the P4-05a composition. Both
+landed lint-clean and green on the first Verilator run — which is exactly when
+the mutation half stops being a formality and becomes the only evidence that
+the testbenches check anything.
+
+**Checking an expiry from one side proves nothing.** "`irq` high at cycle N"
+passes for any timer that fires *at or before* N, so a prescaler that is
+ignored outright, or a terminal count one tick early, would both pass. Each
+expiry is now checked from both sides — low on the cycle before the derived
+rise, high on it — and that pair is what `prescaler_ignored` and
+`terminal_off_by_one` fail against. `always_reload` fires at exactly the right
+moment and diverges only afterwards, so it needed a different check entirely:
+three idle periods after the one-shot expiry, with `COUNT` and `STATUS` both
+required to have stayed put.
+
+**A one-shot cannot stop itself through `CTRL.enable`.** That field is `rw` —
+the register block owns it and software alone writes it. Hardware stopping the
+counter needs its own state, which is what `running` is. Worth remembering for
+every future peripheral: the composition gives you the register's *value*, not
+a way to change it from the hardware side unless the field is `ro` or `w1c`.
+
+**Masking before the latch is the bug that looks like a simplification.** The
+interrupt controller latches every request regardless of `ENABLE` and masks
+only the output. Folding the mask into the latch is one fewer signal and loses
+precisely the request software wants to find when it enables a source later.
+The opening section of the sequence exists to catch it: a request is
+deliberately raised while everything is masked, and unmasking alone must raise
+`irq_out` with no new request.
+
+**A latency bug has no wrong value to catch it by.** Taking the request one
+flop earlier than the settled synchroniser stage changes nothing a simulator
+can see — simulation has no metastability — only *when* it happens. So the
+sequence reads `PENDING` on the exact cycle the last stage goes high and
+requires zero, then reads again two cycles later and requires the request.
+`synchroniser_bypassed` and `one_stage_short` both die on the first read. This
+is the same shape as the GPIO's `one_stage_short` from P4-05a, and it is now
+clear that it generalises: **for anything crossing a clock domain, pin the
+latency, because the value will look right either way.**
+
+**The edge history flop belongs after the synchroniser, not inside it.** With
+two stages the chain already holds a previous value in `irq_sync0`, and using
+it saves a flop. It is also one flop deep from an asynchronous pin, so feeding
+it into the edge comparison puts the metastability hazard back into the very
+latch the synchroniser protects. Cheap to get wrong; free to get right.
+
+**Edge and level are invisible to a pulse.** Every pulse earlier in the
+sequence latches identically under both modes, so the two swap mutations
+survive all of it. They are caught only by the final section, which holds a
+source asserted across a write-1-to-clear: level re-arms the flag on the same
+clock the write clears it, edge does not.
+
+Phase 4's exit criterion — "8+ IPs, each: both-language RTL, regblock-driven
+where applicable, datasheet, TB running in CI" — is met at nine.
+
+### P4-09: the generators were fine; nothing was attached to anything
+
+P3-06 shipped a monitor/checker/scoreboard generator, compile-gated, with its
+own docs, and closed with "Not wired into `generate_files` — like P3-05, this
+lands standalone." It stayed standalone through the whole of Phase 4: nine IPs
+were built past it without a single one using it. That is the project's
+recurring failure mode in its purest form — an artifact that exists, passes its
+own tests, and verifies nothing — and it survived this long precisely because
+every test it had was green.
+
+**`bind` is what made attaching it cheap.** The obvious route was to
+instantiate scaffolds from the generated testbench, which means a new child
+node on `TbModule`, a `TbSpec` field, validator and renderer changes, and a
+frozen-contract decision — all so a checker could see nets the DUT already
+exposes. SystemVerilog `bind` needs none of it: the statement sits in the
+scaffold's own file and resolves in the DUT's scope. The generated testbench is
+byte-identical with or without a scaffold. Two hours of contract work replaced
+by a language feature that already exists for exactly this.
+
+Worth remembering as a general move: **when wiring something in looks like it
+needs a contract change, check whether the target language already has the
+seam.**
+
+**The fact the whole design rests on, measured rather than assumed.** Verilator
+turns `$error` into an implicit `$stop` and aborts with exit 134. Had it merely
+printed and continued, the testbench would still have reported SMOKE PASS and
+every checker in the file would have been decoration — a second layer of the
+same bug being fixed. That was checked with a six-line experiment *before* any
+of the scaffold was designed, not after it was written.
+
+**The mutation that proves the scaffold adds power, and the one that does
+not.** `rdata_churns` corrupts `rdata` only on cycles no directed read samples:
+the read still returns the right word at the cycle the testbench looks, and
+inverts every cycle after. Run twice on the same broken DUT — the testbench
+passes, the scaffold fails. That *pair* is the evidence; a mutation failing
+both ways would only show the testbench works.
+
+The liveness mutations do not clear that bar, and the first attempt at them was
+wrong. Breaking the write-response path fails the directed check at cycle 3,
+which aborts the run long before the 16-cycle latency counter expires — so the
+gate was asserting the checker's message on a run the checker never reached.
+The honest conclusion is that on SemiCraft's own directed sequences, which
+check the response cycle of *every* transaction, the liveness check adds
+nothing to the smoke gate; its value is in the file a user reuses in a more
+sparsely checked bench. Recording that is better than quietly deleting the
+check or, worse, weakening the assertion until it passed. To show it works at
+all, the gate now silences the testbench's own `$fatal` calls first, so the
+scaffold is the only thing left in the compile that can stop the run.
+
+**The restyling trap, caught by remembering P3-05a rather than by a failure.**
+An IP's `verification_spec(opts)` never sees the render style. AXI4-Lite fixes
+its reset active-low and `build_name_map` appends `_n`, so a spec naming
+`areset` would bind against a net rendered `areset_n` — broken at the
+**default** configuration, not merely under a custom naming convention. That is
+the exact bug P3-05a found in the assertion path. `checkers/restyle.py` closes
+it, the run gate carries a naming-style axis so it stays closed, and
+`check_spec_is_restylable` refuses to ship a catalog spec whose opaque fields
+would survive restyling unchanged — making the documented limitation
+unreachable by accident instead of merely written down.
+
+**A width bug the run gate found thirteen minutes in, and the test that now
+finds it in a tenth of a second.** `axil_verification` defaults to a 32-bit
+`rdata`; every composed peripheral fixes its data width at 32 and takes the
+default; `axil-regblock` is the one IP where the width is an option, and it was
+wired up without passing it through. A 32-bit scaffold port bound to a 64-bit
+net does not compile — and the only thing that noticed was one Verilator case
+deep inside a 13-minute gate. Widths are *structural*: a test that walks every
+scaffold port against the DUT's own port table needs no simulator and covers
+thirteen option cases in 0.12s. It was written by first confirming it fails
+against the original bug.
+
+**Still unused: the scoreboard.** No scaffold here has one, and the reason is
+worth stating rather than papering over. An expected-value scoreboard needs a
+model of what the next value should be; for a register block that model is
+`RegisterModel`, which lives in Python and drives the testbench. There is
+nothing in the DUT's scope to compare against, and pushing a hardware-derived
+"expected" value would only compare the design against itself. A scoreboard
+belongs where ordering *is* the property — a FIFO — which is now recorded as
+the next place to use it. One third of P3-06 therefore remains unattached, and
+saying so is more useful than shipping a scoreboard that cannot fail.
+
+### P4-10: the diagram is a rendering, not an illustration
+
+The datasheet already had ports and registers, so the only new content in this
+WP was timing diagrams — and a timing diagram is the single most drift-prone
+thing you can put in generated documentation. It looks authoritative, it is
+normally drawn by hand, and nothing checks it. This project has already fixed
+that exact class of bug twice (reserved bits "ignore writes" vs. SLVERR; a
+generic renderer asserting timing the model did not own), so the question was
+never "how do I draw a waveform" but "what do I draw it *from* so it cannot
+lie".
+
+The answer was already in the repo: `TbSpec`. It is cycle-accurate, it is what
+`generate_tb` turns into the smoke testbench, and that testbench runs under
+Verilator against the real RTL on every option case of every IP. Rendering the
+diagram from it closes the chain — diagram <- tb_spec <- run gate — so a
+diagram cannot be quietly wrong while the tests are green. Nothing new had to
+be verified; an existing verified thing had to be pointed at the page.
+
+**`x` where the testbench says nothing.** Outputs are pinned only on checked
+cycles. Drawing the rest `x` was not a rendering shortcut — it is what the
+testbench knows — and it turned out to be the most useful property of the
+diagrams: a long `x` run is a stretch of behaviour nobody checks, now visible
+in the datasheet instead of smoothed over with a plausible line.
+
+**The one test that matters, confirmed able to fail.** Structural checks
+(matching wave lengths, real port names, `data` labels aligned to `=` slots,
+legal wave characters) catch garbage but would all pass for a diagram that
+ignored the spec entirely. The test that carries the claim walks every drawn
+output value back to the `Check.expected` at that cycle. It was validated by
+deliberately introducing a one-cycle prologue misalignment first: nine IPs
+failed, and only then was it kept. Same for the "changing a check changes the
+diagram" test, which exists because every structural test above would pass for
+a hardcoded constant.
+
+**A frozen contract left alone.** The obvious shape for this is a `.json` file
+next to the RTL. `GeneratedFile.kind` is a frozen `Literal["rtl", "tb", "doc"]`
+and a data file is none of the three — the same blocker already recorded
+against the ROM's `$readmemh` route. Inlining the JSON in the markdown is how
+WaveDrom is embedded in markdown anyway, so the contract stayed shut for a
+diagram, which is not a good enough reason to open it.
+
+**Scope kept to IPs**, per the WP title. Widening it to the seven modules would
+have rewritten roughly fifteen hundred goldens for a decision nobody has made;
+a test pins that a module datasheet has no timing section, so the boundary is
+deliberate rather than accidental.
+
+### P4-11: the example generator found a bug four releases old
+
+The WP was examples plus the release. The examples themselves were
+straightforward — a wrapper per IP, ports grouped from `port_groups()`,
+annotated from `bundles()`, emitted as a **real HDL file** and lint-gated
+`-Wall` against the IP it instantiates rather than printed into markdown. A
+copy-pasteable snippet with a wrong port name is worse than none, because a
+reader trusts it; the gate was confirmed able to fail by mis-wiring one
+connection in a committed golden.
+
+What the WP actually bought was a bug it stumbled into. The example's
+connections have to resolve to real nets, and building that resolution surfaced
+that **the datasheet's port table never applied the render name map at all**.
+Under any naming convention, prefix or suffix, every module and every IP listed
+ports that do not exist in the generated RTL. Shipped since v0.2.0.
+
+**The third instance of one pattern.** P3-05a: assertion specs named canonical
+resets. P4-07: the testbench clock net was hardcoded `clk`. Now the datasheets.
+Three separate generators, three separate authors' worth of care, one shared
+cause — **no golden case anywhere set a naming style.** A generator that forgot
+to restyle produced byte-identical output at the default configuration, which is
+all the goldens ever exercised. The proof is that fixing this changed *zero* of
+the 1873 existing goldens.
+
+So the fix had to be two-part, and the second part matters more: a
+`styled_names` case now exists on **all 26 catalog items**, covering RTL,
+datasheet, both testbenches, test plan, verification scaffold and example. The
+axis is no longer invisible. Where a bug recurs three times, fixing the third
+instance is not the work — closing the gap that let all three through is.
+
+**The fix itself was small because P3-07 had already mapped the terrain.** The
+test-plan generator hit the same `port_groups()` quirk — canonical names except
+an active-low reset the metadata suffixes `_n` — and documented it in a comment
+rather than papering over it. That comment is what made the datasheet fix a
+ten-line resolution helper instead of a rewrite of every IP's metadata. Worth
+noticing: the payoff for writing down *why* something is odd arrived a whole
+phase later.
+
+**Release hygiene held.** All goldens regenerated to a banner-only diff with 588
+config hashes byte-identical — the same check v0.3.0 introduced after v0.2.0
+shipped stamped with the wrong version. `test_version_consistency.py` ties
+VERSION, pyproject and the checklist heading together, so the three moved as
+one.
+
+**Phase 4 is complete: 13 WPs, 9 IPs, exit criterion of 8+ cleared.** Two
+deliberate blocks (async FIFO, ROM) carry recorded unblock paths, and the
+scoreboard family is still unattached with a recorded reason. Nothing in Phase 4
+has ever been executed by CI — the branch it was built on is not one `ci.yml`
+triggers on — so a pull request should precede both tags.

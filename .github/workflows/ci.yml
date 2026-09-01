@@ -34,6 +34,33 @@ jobs:
       - name: Run pytest
         run: uv run pytest
 
+  frontend:
+    name: frontend (build + test + lint)
+    runs-on: ubuntu-latest
+    # Added at P4-06. The frontend had 172 tests, a production build and an
+    # eslint config, and *no* CI job ran any of them — which is how a broken
+    # `npm ci` lockfile once survived unnoticed. `npm ci` is deliberate rather
+    # than `npm install`: it fails on a lockfile that does not match
+    # package.json, which is exactly the failure this job exists to catch.
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Unit tests
+        run: npm test -- --run
+      - name: Production build
+        run: npm run build
+
   lint-gate:
     name: golden lint + tb-compile gate (verilator)
     runs-on: ubuntu-latest
@@ -72,6 +99,106 @@ jobs:
           fi
       - name: Run golden TB compile gate (P2-14)
         run: uv run pytest backend/tests/golden/test_tb_compile.py -v
+      - name: Run cocotb backend run gate (P3-08, beta)
+        # Executes each module's generated cocotb testbench against its
+        # generated RTL under Verilator (defaults case per module, ~70s total).
+        # Skips rather than fails if cocotb is absent, so it is a no-op in the
+        # plain pytest job.
+        run: uv run pytest backend/tests/tb/test_cocotb_run.py -v
+      - name: Run checker/monitor/scoreboard compile gate (P3-06)
+        # The P3-06 scaffolds ship as generated SystemVerilog but were only
+        # text-asserted when they landed; nothing compiled them. These tests
+        # skip when verilator is absent, so they are a no-op in the plain
+        # pytest job and only do real work here.
+        run: uv run pytest backend/tests/checkers/test_compile.py -v
+      - name: Run reference IP TB run gate (P4-01)
+        # The P4-01 IP contract is proven by a reference IP that goes through
+        # the whole pipeline; this compiles and runs its generated testbench
+        # over six configurations, including a prefix+camelCase naming style.
+        # That naming case is the one no golden covers, and it is what found
+        # the render_tb hardcoded-clock bug (TB_SPEC §7a).
+        run: uv run pytest backend/tests/ips/test_run.py -v
+
+      - name: Run AXI4-Lite register block gate (P4-02)
+        # Runs the generated AXI transaction testbench across nine
+        # configurations, then deliberately breaks the generator four ways and
+        # asserts the suite catches each one. The mutation half is the point:
+        # a bus-protocol sequence can look thorough while proving nothing.
+        run: uv run pytest backend/tests/ips/test_axil_regblock_run.py -v
+
+      - name: Run synchronous FIFO gate (P4-03a)
+        # Eight configurations plus four deliberately broken generators that
+        # must fail: flow control removed, read index wrong, full stuck low,
+        # empty stuck low. A FIFO test that only pushes and pops never touches
+        # boundary flow control or ordering.
+        run: uv run pytest backend/tests/ips/test_sync_fifo_run.py -v
+
+      - name: Run synchronous RAM gate (P4-04)
+        # Includes the write-first mutation: a RAM whose read-during-write
+        # returns new data is a different component, and nothing in the port
+        # list distinguishes the two.
+        run: uv run pytest backend/tests/ips/test_ram_run.py -v
+
+      - name: Run AXI4-Lite GPIO gate (P4-05a)
+        # The first composed IP (a spliced register block). Its mutations
+        # include bypassing the input synchroniser and dropping it to a single
+        # stage — a missing metastability guard never shows up in simulation,
+        # so the testbench has to be timed to catch it.
+        run: uv run pytest backend/tests/ips/test_axil_gpio_run.py -v
+
+      - name: Run AXI4-Lite UART gate (P4-05b)
+        # Eight line rates and configurations, plus four mutations that each
+        # leave a *well-formed* frame behind: MSB-first shifting, sampling on
+        # bit edges instead of mid-bit, a bit period off by one, and rx_valid
+        # never raised. A UART testbench passes far too easily without them.
+        run: uv run pytest backend/tests/ips/test_axil_uart_run.py -v
+
+      - name: Run AXI4-Lite SPI gate (P4-06)
+        # All four clock modes, plus mutations that each leave a plausible
+        # waveform: LSB-first shifting, sampling on the wrong edge (mode N0
+        # behaving as N1), and a clock that never toggles.
+        run: uv run pytest backend/tests/ips/test_axil_spi_run.py -v
+
+      - name: Run AXI4-Lite I2C gate (P4-07)
+        # Includes a deliberately stretched clock, and mutations that each
+        # leave a plausible bus waveform: sampling every quarter instead of
+        # once per bit, a START with SCL never high, SDA never driven, and
+        # clock stretching ignored.
+        run: uv run pytest backend/tests/ips/test_axil_i2c_run.py -v
+
+      - name: Run AXI4-Lite timer gate (P4-08)
+        # Mutations that all attack timing, because timing is all a timer
+        # does: a prescaler that is ignored, a terminal count one tick early,
+        # one-shot mode that silently reloads, and an interrupt that ignores
+        # its mask. Each expiry is checked from both sides so an early fire
+        # fails as loudly as a late one.
+        run: uv run pytest backend/tests/ips/test_axil_timer_run.py -v
+
+      - name: Run AXI4-Lite interrupt controller gate (P4-08)
+        # Mutations across the three things the controller decides: where the
+        # mask is applied (before the latch, or on the output), which value is
+        # trusted (the pin, the first flop, or the settled stage), and what
+        # counts as a request (edge or level, in both directions).
+        run: uv run pytest backend/tests/ips/test_axil_intc_run.py -v
+
+      - name: Run bound verification-scaffold gate (P4-09)
+        # The P3-06 monitor/checker generators, finally attached to real IPs
+        # with SystemVerilog `bind`. Beyond compiling: `rdata_churns` breaks a
+        # property the directed testbench structurally cannot see and is run
+        # both with and without the scaffold, so the pair shows what the
+        # scaffold adds rather than that the testbench works. Every IP gate
+        # above also compiles its own scaffold in, so the checks run across
+        # every option case of all nine IPs, not just this file's.
+        run: uv run pytest backend/tests/ips/test_verification_run.py -v
+
+      - name: Run example-instantiation lint gate (P4-11)
+        # Every IP's generated example, linted -Wall against the IP it
+        # instantiates. An example nobody compiles is the artifact-that-cannot-
+        # fail problem in its most user-visible form: a wrong port name in a
+        # copy-pasteable snippet is worse than no snippet, because a reader
+        # trusts it.
+        run: uv run pytest backend/tests/golden/test_example_lint.py -v
+
       - name: Run golden TB run gate (P3-03a, enforcing)
         # Executes each module's defaults smoke TB (SEMICRAFT_TB_RUN_ALL=1
         # for the full matrix). Went enforcing after the first advisory run

@@ -149,14 +149,102 @@ def test_port_constraint_bounds_driven_value() -> None:
 # --------------------------------------------------------------------------- #
 
 
+# Modules that attach a real ``TbSpec.assertion_spec`` (P3-05a wiring), under
+# *default* options — which is what ``_tb`` builds.
+#
+# pwm is deliberately absent: only its counter is reset and `pwm_out` is
+# combinational from it, so there is no reset value that is true of every
+# configuration. Attaching a property that merely usually holds would be worse
+# than attaching none.
+#
+# edge-detector is present because `registered_output` defaults to True, making
+# `pulse` a flop with a real reset value. Its combinational-output cases emit no
+# SVA — covered by test_edge_detector_combinational_output_has_no_sva below,
+# since this parametrization only ever sees default options.
+_MODULES_WITH_ASSERTIONS = {
+    "clock-divider",
+    "debouncer",
+    "edge-detector",
+    "gray-counter",
+    "lfsr",
+    "rr-arbiter",
+}
+
+
 @pytest.mark.parametrize("item_id", MODULE_IDS)
-def test_assertion_hook_inert_for_current_modules(item_id: str) -> None:
-    """No current module declares an assertion_spec, so no SVA block is emitted
-    and the run gate / goldens are unaffected by the hook."""
+def test_assertion_hook_emits_sva_only_for_wired_modules(item_id: str) -> None:
+    """The SVA block appears exactly for modules that declare an assertion_spec.
+
+    Was ``test_assertion_hook_inert_for_current_modules`` while no module used
+    the hook. It is not enough to relax that to "some modules may emit SVA" —
+    the useful invariant is the *exact* correspondence, so an accidental spec
+    (or an accidentally dropped one) still fails a test.
+    """
     assert pwm.tb_spec  # sanity
     tb = _tb(item_id)
-    assert "assert property" not in tb
-    assert "Concurrent assertions (SVA)" not in tb
+    if item_id in _MODULES_WITH_ASSERTIONS:
+        assert "// Concurrent assertions (SVA)" in tb
+        assert "assert property" in tb
+    else:
+        assert "assert property" not in tb
+        assert "Concurrent assertions (SVA)" not in tb
+
+
+def test_edge_detector_combinational_output_has_no_sva() -> None:
+    """`registered_output=False` makes `pulse` a continuous assign.
+
+    There is then no reset value to assert — `pulse` follows `d` even while
+    reset is asserted — so the module must attach nothing rather than a
+    property that only holds in the registered configuration.
+    """
+    from semicraft_core.modules import edge_detector
+
+    opts = edge_detector.MODULE.options_model.model_validate({"registered_output": False})
+    assert edge_detector.MODULE.tb_spec(opts).assertion_spec is None
+
+    opts_registered = edge_detector.MODULE.options_model.model_validate(
+        {"registered_output": True}
+    )
+    assert edge_detector.MODULE.tb_spec(opts_registered).assertion_spec is not None
+
+
+def test_pwm_attaches_no_assertion_spec() -> None:
+    """pwm is intentionally unwired — see _MODULES_WITH_ASSERTIONS.
+
+    Pinned so that "pwm has no SVA" stays a deliberate decision with a stated
+    reason, rather than something that could be silently changed.
+    """
+    opts = pwm.MODULE.options_model.model_validate({})
+    assert pwm.MODULE.tb_spec(opts).assertion_spec is None
+
+
+@pytest.mark.parametrize("item_id", sorted(_MODULES_WITH_ASSERTIONS))
+def test_wired_module_assertions_use_rendered_reset_name(item_id: str) -> None:
+    """Assertion text must name the *rendered* reset net, not the canonical one.
+
+    A module writes canonical names (``rst``); ``build_name_map`` renders an
+    active-low reset as ``rst_n``. Without the restyle step in ``generate_tb``
+    the emitted text would reference a net that does not exist — and since
+    active-low is the default, that would be broken out of the box.
+
+    The reset name reaches the text by two different routes, so this checks the
+    net name rather than one idiom: a guarded item emits ``disable iff (!rst_n)``,
+    while ``ResetKnownValue`` emits ``$rose(rst_n)`` and is deliberately
+    *unguarded* (it is the assertion *about* reset, so disabling it during reset
+    would defeat it). Modules carrying only that item therefore have no
+    ``disable iff`` at all.
+    """
+    tb = _tb(item_id)  # default options => active-low reset
+    sva = tb[tb.index("// Concurrent assertions (SVA)") :]
+
+    assert "rst_n" in sva
+    # No bare canonical `rst` anywhere in the SVA block. `\brst\b` cannot match
+    # inside `rst_n` (`_` is a word character), so this catches exactly the
+    # unrestyled spelling.
+    assert re.search(r"\brst\b", sva) is None, (
+        f"{item_id}: SVA block references the canonical reset name rather than "
+        f"the rendered one:\n{sva}"
+    )
 
 
 def test_assertion_spec_wires_into_tb() -> None:
@@ -194,3 +282,44 @@ def test_checks_render_exactly_the_spec_expected_values() -> None:
     rendered_expected = re.findall(r"expected (\d+), got", tb)
     assert len(rendered_expected) == len(spec.checks)
     assert sorted(int(x) for x in rendered_expected) == sorted(c.expected for c in spec.checks)
+
+
+# --------------------------------------------------------------------------- #
+# 5. Naming style reaches every edge-waiting construct
+# --------------------------------------------------------------------------- #
+
+# A prefix + camelCase style renames every net, including the clock. Until
+# P4-01 the TB renderer held the clock name in a module-level constant
+# (`_CLOCK_NAME = "clk"`), which was right only for the default style: with a
+# prefix the DUT clock rendered `p_clk` while every `@(posedge clk)` in the
+# stimulus and the watchdog still said `clk`, so the emitted testbench did not
+# compile at all. No golden case exercises a naming style, so nothing caught
+# it; the reference IP's Verilator run gate did.
+_STYLED = {"naming": {"convention": "camel", "prefix": "p_"}}
+
+
+@pytest.mark.parametrize("item_id", MODULE_IDS)
+def test_every_edge_wait_uses_the_styled_clock(item_id: str) -> None:
+    """Every ``@(edge X)`` in a styled TB must name the styled clock net.
+
+    Checked as a set rather than a substring search so an edge wait on some
+    *other* net would fail too, not just an unstyled one.
+    """
+    res = generate_files(item_id, _STYLED)
+    tb = next(f.text for f in res.files if f.kind == "tb" and f.path.endswith("_tb.sv"))
+    edges = set(re.findall(r"@\((?:pos|neg)edge (\w+)\)", tb))
+    assert edges == {"p_clk"}, (
+        f"{item_id}: testbench waits on {sorted(edges)}; under this naming style "
+        f"the only clock net the RTL declares is 'p_clk'"
+    )
+
+
+@pytest.mark.parametrize("item_id", MODULE_IDS)
+def test_styled_tb_declares_every_net_it_waits_on(item_id: str) -> None:
+    """The net an edge wait names must actually be declared in the TB."""
+    res = generate_files(item_id, _STYLED)
+    tb = next(f.text for f in res.files if f.kind == "tb" and f.path.endswith("_tb.sv"))
+    for net in set(re.findall(r"@\((?:pos|neg)edge (\w+)\)", tb)):
+        assert re.search(rf"^\s*(?:logic|reg|wire)\b[^;]*\b{net}\b", tb, flags=re.M), (
+            f"{item_id}: testbench waits on '{net}', which it never declares:\n{tb}"
+        )

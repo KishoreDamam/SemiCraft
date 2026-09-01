@@ -36,6 +36,7 @@ from typing import Literal
 
 from pydantic import Field
 
+from ..assertions.spec import AssertionSpec, ResetContext, ResetKnownValue
 from ..ir.build import IN, OUT, bit, vec
 from ..ir.nodes import (
     AlwaysFF,
@@ -283,12 +284,32 @@ def tb_spec(opts: DebouncerOptions) -> TbSpec:
         Check(cycle=7, signal="q", expected=idle),
     ]
 
+    # Concurrent SVA (P3-05a wiring). Canonical names; generate_tb restyles them.
+    #
+    # `q`'s reset value is its *idle* level, which follows `active_level` — 1
+    # for "high", 0 for "low" — so the expected value is derived from the option
+    # rather than assumed to be 0. Asserting 0 unconditionally would fail every
+    # default-configuration run, since active_level="high" resets q to 1.
+    idle_level = 1 if opts.active_level == "high" else 0
+    assertion_spec = AssertionSpec(
+        clock="clk",
+        items=[
+            ResetKnownValue(name="q_reset_value", signal="q", value=idle_level, width=1)
+        ],
+        reset=ResetContext(
+            signal="rst",
+            active_low=opts.reset_polarity == "active_low",
+            sync=opts.reset_style == "sync",
+        ),
+    )
+
     return TbSpec(
         clock="clk",
         reset="rst",
         reset_cycles=2,
         vectors=vectors,
         checks=checks,
+        assertion_spec=assertion_spec,
     )
 
 

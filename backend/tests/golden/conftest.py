@@ -51,7 +51,7 @@ class GoldenCase:
     options: dict
     language: str  # "sv" | "verilog" — always resolved, even if the case omitted it
     snapshot_name: str  # e.g. "defaults.sv" — filename within tests/golden/<id>/
-    kind: str = "snippet"  # registry.item_kind(item): "snippet" | "module" (P2-14)
+    kind: str = "snippet"  # registry.item_kind(item): "snippet"|"module"|"ip"
 
     @property
     def snapshot_path(self) -> Path:
@@ -93,6 +93,49 @@ class GoldenCase:
             / self.snippet_id
             / f"{self.case_name}.{_extension(self.language)}_testplan.md"
         )
+
+    @property
+    def cocotb_snapshot_path(self) -> Path:
+        """Golden path for the module cocotb testbench (P3-08, beta).
+
+        Language-qualified for the same config_hash reason as the other
+        per-case snapshots: the hash is stamped into the file's banner.
+        """
+        return (
+            GOLDEN_ROOT
+            / self.snippet_id
+            / f"{self.case_name}.{_extension(self.language)}_cocotb.py"
+        )
+
+    @property
+    def checks_snapshot_path(self) -> Path:
+        """Golden path for the verification scaffold (P4-09), a ``tb``-kind file.
+
+        Only IPs emit one, and only for an ``sv`` build (``bind`` has no
+        Verilog-2001 equivalent), so this snapshot is skipped rather than
+        failed where there is no file. Kept as a real ``.sv`` file for the same
+        reason as :attr:`tb_snapshot_path`: a compile gate can glob it and hand
+        it straight to Verilator.
+        """
+        return (
+            GOLDEN_ROOT
+            / self.snippet_id
+            / f"{self.case_name}.{_extension(self.language)}_checks.sv"
+        )
+
+    @property
+    def example_snapshot_path(self) -> Path:
+        """Golden path for the example instantiation (P4-11), a second
+        ``rtl``-kind file.
+
+        Only IPs emit one. Language-qualified twice — ``<case>.<ext>_example.
+        <ext>`` — because the example *is* HDL in that language, so the trailing
+        extension has to be real for a compile gate to hand it to Verilator,
+        while the leading one keeps sv/verilog variants of a case apart the way
+        every other snapshot does.
+        """
+        ext = _extension(self.language)
+        return GOLDEN_ROOT / self.snippet_id / f"{self.case_name}.{ext}_example.{ext}"
 
     @property
     def resolved_options(self) -> dict:

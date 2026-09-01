@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.4.0
 // Testbench: gray_counter_tb (config hash: f722bd7b3507)
 // Smoke testbench (stub, compile-checked only) for gray_counter
 //
@@ -65,5 +65,11 @@ module gray_counter_tb;
         $display("SMOKE PASS: gray_counter");
         $finish;
     end
+
+    // Concurrent assertions (SVA)
+    gray_reset_value: assert property (@(posedge clk) $fell(rst) |-> gray == 8'd0)
+        else $fatal(1, "SVA FAIL: gray_reset_value");
+    gray_stable_when_disabled: assert property (@(posedge clk) disable iff (rst) !en |=> $stable(gray))
+        else $fatal(1, "SVA FAIL: gray_stable_when_disabled");
 
 endmodule

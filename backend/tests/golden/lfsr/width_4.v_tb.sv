@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.4.0
 // Testbench: lfsr_tb (config hash: c110f15b9620)
 // Smoke testbench (stub, compile-checked only) for lfsr
 //
@@ -65,5 +65,11 @@ module lfsr_tb;
         $display("SMOKE PASS: lfsr");
         $finish;
     end
+
+    // Concurrent assertions (SVA)
+    q_reset_value: assert property (@(posedge clk) $rose(rst_n) |-> q == 4'd1)
+        else $fatal(1, "SVA FAIL: q_reset_value");
+    q_stable_when_disabled: assert property (@(posedge clk) disable iff (!rst_n) !en |=> $stable(q))
+        else $fatal(1, "SVA FAIL: q_stable_when_disabled");
 
 endmodule

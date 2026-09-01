@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.4.0
 // Testbench: rr_arbiter_tb (config hash: 44a0e0329fe0)
 // Smoke testbench (stub, compile-checked only) for rr_arbiter
 //
@@ -78,5 +78,11 @@ module rr_arbiter_tb;
         $display("SMOKE PASS: rr_arbiter");
         $finish;
     end
+
+    // Concurrent assertions (SVA)
+    grant_onehot0: assert property (@(posedge clk) disable iff (rst) $onehot0(grant))
+        else $fatal(1, "SVA FAIL: grant_onehot0");
+    grant_reset_value: assert property (@(posedge clk) $fell(rst) |-> grant == 16'd0)
+        else $fatal(1, "SVA FAIL: grant_reset_value");
 
 endmodule

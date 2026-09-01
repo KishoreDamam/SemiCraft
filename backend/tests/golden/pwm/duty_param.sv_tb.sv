@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.4.0
 // Testbench: pwm_tb (config hash: b04486fb66e3)
 // Smoke testbench (stub, compile-checked only) for pwm
 //

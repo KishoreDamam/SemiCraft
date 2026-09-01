@@ -19,6 +19,8 @@ Error mapping (§4, unchanged in v2):
   ``["body", "options"]`` so the frontend's ``fieldErrorsFrom()`` (lib/api.ts)
   can find the offending field.
 - generator bug producing invalid IR -> :class:`IRValidationError` -> HTTP 500
+  (v2 also maps :class:`IpContractError` — an IP whose declared bundles
+  contradict the module it generates, P4-01 — to the same envelope)
   with a generic message; the real error is logged server-side only.
 
 Lint (WP-04) is imported lazily inside the request path because it is being
@@ -39,6 +41,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, ValidationError
 from semicraft_core.generate import generate as core_generate
 from semicraft_core.generate import generate_files as core_generate_files
+from semicraft_core.ips.contract import IpContractError
 from semicraft_core.ir.validate import IRValidationError
 from semicraft_core.snippets import registry
 
@@ -256,8 +259,12 @@ def _generate_files_or_error(item_id: str, options: dict):
             loc = ["body", "options", *err["loc"]]
             errors.append({"loc": loc, "msg": err["msg"], "type": err["type"]})
         return JSONResponse(status_code=422, content={"detail": errors})
-    except IRValidationError:
-        logger.exception("IR validation failed for item_id=%s (generator bug)", item_id)
+    except (IRValidationError, IpContractError):
+        # Both are *generator* bugs, not user input: invalid IR, or an IP whose
+        # declared bundles contradict the module it generates (P4-01). Same
+        # envelope, so an IP fails the way a module does instead of escaping as
+        # an unhandled exception with a different body.
+        logger.exception("generation failed for item_id=%s (generator bug)", item_id)
         return JSONResponse(
             status_code=500,
             content={"detail": "Internal error generating code."},

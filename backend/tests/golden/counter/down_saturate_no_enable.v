@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.4.0
 // Snippet: counter (config hash: a5d0021bb3ad)
 // Down counter, 8-bit
 //

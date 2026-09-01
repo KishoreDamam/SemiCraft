@@ -8,11 +8,12 @@ exposes a :class:`~..modules.contract.ModuleDef` instance is registered into the
 *same* catalog. Adding a snippet or module file therefore requires no edit here
 (that is the whole point: parallel WP agents each drop in one file).
 
-One catalog, two source packages
----------------------------------
+One catalog, three source packages
+-----------------------------------
 
-Snippets and modules share one registry keyed by ``id``. A duplicate ``id`` is a
-hard error *across both packages* (a module and a snippet may not share an id).
+Snippets, modules and — since Phase 4 — IPs share one registry keyed by ``id``.
+A duplicate ``id`` is a hard error *across all of them* (a module and a snippet
+may not share an id).
 Each registered item carries a ``kind`` ("snippet"|"module"|later
 ip/subsystem/app) and a ``maturity`` ("stable"|"beta"), read via
 :func:`item_kind` / :func:`item_maturity` with getattr-defaulting so pre-taxonomy
@@ -34,6 +35,12 @@ from .contract import SnippetDef
 # The contract/registry modules themselves hold no items; skip them so a stray
 # SnippetDef/ModuleDef-shaped helper there could never be mistaken for one.
 _SKIP_MODULES = {"contract", "registry"}
+
+# The IP package (Phase-4 P4-01) additionally carries pure metadata/rendering
+# modules alongside its catalog items. They are listed here rather than added
+# to _SKIP_MODULES so that a *snippet* called ``doc.py`` would still be
+# discovered — the skip list is per package, not global.
+_IP_SKIP_MODULES = _SKIP_MODULES | {"regmap", "bundles", "doc", "verification"}
 
 # Taxonomy defaults (Appendix A.2). Read via getattr so pre-taxonomy snippet
 # files that declare neither field are treated as stable snippets.
@@ -89,14 +96,20 @@ def _looks_like_def(obj: object) -> bool:
     return isinstance(model, type) and issubclass(model, BaseModel)
 
 
-def _discover_package(pkg, found: dict[str, SnippetDef]) -> None:
+def _discover_package(
+    pkg, found: dict[str, SnippetDef], skip: set[str] = _SKIP_MODULES
+) -> None:
     """Import every submodule of ``pkg`` and collect catalog defs into ``found``.
+
+    ``skip`` names submodules that hold no catalog items (contracts, helper
+    models, renderers) and is per package, so one package's helper name never
+    hides another package's catalog file.
 
     A duplicate ``id`` — whether within this package or already contributed by
     another — raises :class:`DuplicateSnippetError`.
     """
     for mod_info in pkgutil.iter_modules(pkg.__path__):
-        if mod_info.name in _SKIP_MODULES:
+        if mod_info.name in skip:
             continue
         module = importlib.import_module(f"{pkg.__name__}.{mod_info.name}")
         for value in vars(module).values():
@@ -112,13 +125,20 @@ def _discover_package(pkg, found: dict[str, SnippetDef]) -> None:
 
 
 def _discover() -> dict[str, SnippetDef]:
-    """Import both catalog packages and collect the def instances (Appendix A.3)."""
+    """Import every catalog package and collect the def instances.
+
+    Three packages share one id namespace: snippets (Appendix A.3), modules
+    (Appendix A.3) and IPs (Appendix B). The IP package holds only the contract
+    until P4-02 lands the first IP, so it legitimately contributes nothing yet.
+    """
+    import semicraft_core.ips as ips_pkg
     import semicraft_core.modules as modules_pkg
     import semicraft_core.snippets as snippets_pkg
 
     found: dict[str, SnippetDef] = {}
     _discover_package(snippets_pkg, found)
     _discover_package(modules_pkg, found)
+    _discover_package(ips_pkg, found, skip=_IP_SKIP_MODULES)
     return found
 
 
@@ -157,7 +177,8 @@ def by_kind(kind: str) -> list[SnippetDef]:
     """All registered items whose taxonomy ``kind`` equals ``kind``, sorted by id.
 
     ``by_kind("snippet")`` reproduces the pre-Phase-2 snippet-only catalog;
-    ``by_kind("module")`` returns just the Phase-2 modules (Appendix A.2).
+    ``by_kind("module")`` returns just the Phase-2 modules (Appendix A.2);
+    ``by_kind("ip")`` the Phase-4 IPs (Appendix B).
     """
     return [item for item in all() if item_kind(item) == kind]
 

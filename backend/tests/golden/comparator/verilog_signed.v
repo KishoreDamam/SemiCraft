@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.4.0
 // Snippet: comparator (config hash: 28beef39c90e)
 // 12-bit signed comparator (eq, lt, gt)
 //

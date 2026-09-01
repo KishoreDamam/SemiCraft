@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.4.0
 // Snippet: mux (config hash: dddc354709bd)
 // 3-input 8-bit multiplexer (case)
 //

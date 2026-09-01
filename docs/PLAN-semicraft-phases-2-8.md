@@ -314,3 +314,94 @@ assembles: rtl file (existing pipeline) + tb file (P2-13 generator consumes
 TbSpec; until P2-13 lands, tb emission is feature-flagged off) + doc file
 (md from ExplanationDoc + port_groups). Header stamping stays owned by the
 entry point.
+
+## Appendix B — P4 Frozen Contracts (P4-01 decisions, 2026-08-20)
+
+### B.1 Catalog taxonomy extension
+
+`kind` gains `"ip"` (Appendix A.2 already reserved it). A third catalog
+package, `semicraft_core/ips/`, is auto-discovered by the same structural
+registry check; its non-item modules (`contract`, `regmap`, `bundles`, `doc`)
+are skipped per package, not globally. `by_kind("ip")` is legitimately empty
+until P4-02 lands the first IP.
+
+### B.2 IpDef contract (implemented by P4-01)
+
+```python
+class IpDef:                       # structural, a strict superset of ModuleDef
+    id, name, description          # as ModuleDef; one id namespace catalog-wide
+    kind = "ip"; maturity
+    options_model: type[BaseModel]
+    def generate(opts) -> Module                     # as ModuleDef
+    def explain(opts) -> ExplanationDoc              # as ModuleDef
+    def port_groups(opts) -> list[PortGroup]         # as ModuleDef
+    def tb_spec(opts) -> TbSpec                      # as ModuleDef
+    def register_map(opts) -> RegisterMap | None     # NEW — software view
+    def bundles(opts) -> list[PortBundle]            # NEW — bus-side interfaces
+```
+
+Because `IpDef` is a superset, an IP goes through the **unchanged** Phase-2/3
+pipeline: render, lint, datasheet, smoke TB, SVA, test plan, cocotb, goldens.
+`generate_files` treats `kind in ("module", "ip")` identically and only
+appends two datasheet sections for an IP.
+
+### B.3 Register map
+
+```python
+Access = Literal["rw", "ro", "wo", "w1c"]
+class RegisterField: name, lsb, width=1, access="rw", reset=0, description
+class Register:      name, offset, fields, description
+class RegisterMap:   name, data_width=32, addr_width=8, registers
+```
+
+A register **has no width of its own**: it is exactly `data_width` bits, the
+map's bus word. Bits no field covers are reserved, read as zero, ignore
+writes. Validation rules R1–R6 (documented in `ips/regmap.py`) are enforced at
+construction: naming conventions (registers `UPPER_SNAKE`, fields
+`lower_snake`), uniqueness, ascending non-overlapping field order, reset fits
+width, `data_width ∈ {8,16,32,64}`, fields fit the word, offsets strictly
+ascending / stride-aligned / inside `2**addr_width`.
+
+Ascending order is *required*, never silently sorted: an out-of-order map is
+far more likely a copy-paste slip than a choice, and sorting it away would
+hide that.
+
+### B.4 Interface abstraction — port bundles
+
+```python
+BundleRole = Literal["target", "initiator"]
+class BundlePort: signal, role_name
+class PortBundle:  name, protocol, role, ports, clock=None, reset=None, description
+```
+
+**Named bundles of flat ports, not SystemVerilog `interface` constructs** —
+the decision this WP locks. A bundle never changes the generated RTL: ports
+stay flat exactly as today, and the bundle only declares which of them belong
+together and what each one's protocol role is. This keeps the output
+Verilog-compatible and leaves lint/golden behaviour untouched; the
+`interface`/`modport` question is deferred until something needs it.
+
+- `role_name` is protocol vocabulary (`awvalid`), not an RTL identifier. It is
+  **never** restyled — that matching is the whole point of bundles.
+- `signal`/`clock`/`reset` are canonical names and **are** restyled through
+  `render.style.build_name_map` before display (`ips/bundles.restyle_bundles`),
+  the same correction `assertions/restyle.py` makes.
+- Clocks/resets are *referenced*, not owned, so several bundles can share one
+  clock domain; a port belongs to at most one bundle.
+- No direction field: the IR module already declares one, and a second source
+  of truth could disagree with it.
+
+`check_bundles_against_module` (rules B1–B4) cross-checks the declaration
+against the generated module during `generate_files`, so a bundle naming a
+port the RTL does not have fails generation rather than producing a datasheet
+for a signal nobody emits.
+
+### B.5 Verification scaffold hook
+
+Deferred to P4-09 by an explicit decision, not an oversight. An IP inherits
+`tb_spec` — including `assertion_spec` — from `ModuleDef`, so IPs already get
+directed TBs and SVA. The P3-06 checker/monitor/scoreboard scaffolds are
+compile-gated and ready but still unattached; the wiring recipe and the
+evidence for deferring are recorded in `PROGRESS.md`. P4-09 attaches them to
+IPs that have real handshakes and transactions, which is where they earn their
+place.

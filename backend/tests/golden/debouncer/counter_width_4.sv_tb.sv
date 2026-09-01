@@ -1,4 +1,4 @@
-// SemiCraft v0.1.0
+// SemiCraft v0.4.0
 // Testbench: debouncer_tb (config hash: 695553ab2ba8)
 // Smoke testbench (stub, compile-checked only) for debouncer
 //
@@ -69,5 +69,9 @@ module debouncer_tb;
         $display("SMOKE PASS: debouncer");
         $finish;
     end
+
+    // Concurrent assertions (SVA)
+    q_reset_value: assert property (@(posedge clk) $rose(rst_n) |-> q == 1'd1)
+        else $fatal(1, "SVA FAIL: q_reset_value");
 
 endmodule

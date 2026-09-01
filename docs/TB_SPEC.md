@@ -1,6 +1,6 @@
 # SemiCraft Testbench IR Specification
 
-**Version 2.2 (Phase 3, P3-09a).** Owner: verification core (`semicraft_core/tb/`).
+**Version 2.3 (Phase 4, P4-01).** Owner: verification core (`semicraft_core/tb/`).
 
 The testbench (TB) IR is a small, frozen-dataclass node family for directed
 **SystemVerilog** testbenches, entirely separate from the synthesizable IR
@@ -21,6 +21,11 @@ The stable public seams are unchanged:
 
 ## Changelog
 
+- **v2.3 (P4-01):** the rendered clock net name is now threaded through the
+  statement emitters from `TbModule.clock` instead of a module-level
+  `_CLOCK_NAME = "clk"` constant (new §7a, normative). Every emitted testbench
+  was uncompilable under any non-default naming style; generator-side only, and
+  byte-identical at the default style, so no golden file changed.
 - **v2.2 (P3-09a):** reset-deassertion race fixed — the deassert drive is now
   preceded by a `#1` settle so it never shares a timestep with the rising edge
   that ends the reset hold (new §6a, normative). Fixes 17/165 golden TBs that
@@ -246,6 +251,33 @@ and the scripts mirror the runner.
 resolves every net through the same style name map the RTL renderer used. Port
 widths are evaluated from the module's default parameter values (`Const`/`Ref`/
 `+ - *` expressions only — anything else raises rather than guessing).
+
+### 7a. The clock net name is data, not a constant (normative decision, P4-01)
+
+Every edge-waiting construct the renderer emits — `WaitCycles`, the
+`TimeoutGuard` watchdog loop, `ResetSeq` — must name the clock net from
+`TbModule.clock.signal`, never a literal `clk`.
+
+`render_tb` originally held it in a module-level `_CLOCK_NAME = "clk"`. That is
+correct for every *default* configuration, because the default naming style
+renders the clock port as `clk`. Under any style with a prefix, a suffix, or
+camelCase conversion the DUT clock renders (say) `p_clk` while the stimulus and
+watchdog still said `clk`, and Verilator rejected the testbench outright:
+`Can't find definition of variable: 'clk'`. Every module was affected, in both
+languages — the emitted testbench simply did not compile.
+
+Why it survived two releases: no golden case sets a naming style, so the whole
+matrix (165 cases) exercises only the one spelling for which the constant
+happened to be right. It was found by the P4-01 reference IP's Verilator run
+gate, which does parametrize over naming.
+
+This is the same failure shape as the assertion restyle of P3-05a: metadata
+written in canonical names, rendered without going through the name map. §7 is
+the general rule; this section records that the *clock* is subject to it too.
+
+Regression cover: `backend/tests/tb/test_directed_tb.py` asserts, for every
+module under a prefix+camelCase style, that the set of nets the TB waits on is
+exactly the styled clock and that every such net is declared.
 
 ## 8. Limitations
 

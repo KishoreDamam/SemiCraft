@@ -8,11 +8,23 @@ Decoder options (semicraft_core/snippets/decoder.py, DecoderOptions):
 ``num_outputs`` (2/4/8/16, default 8), ``enable`` (default True),
 ``output_polarity`` (active_high/active_low, default active_high). Purely
 combinational: no reset_style x reset_polarity matrix (not a clocked snippet).
+
+A ``styled_names`` case pins the naming axis. Nothing covered it until P4-11,
+and three separate restyling bugs shipped behind that gap: assertion specs
+naming canonical resets (P3-05a), a hardcoded testbench clock net (P4-07), and
+datasheet port tables that never applied the name map at all. Every generated
+artifact resolves identifiers through ``build_name_map``; a case that changes
+every identifier is what makes a generator that forgot to visible.
 """
 
 from __future__ import annotations
 
 CASES: dict[str, dict] = {
+    # --- naming style (the axis no golden case covered until P4-11) ---------
+    "styled_names": {
+        "language": "sv",
+        "naming": {"convention": "camel", "prefix": "p_"},
+    },
     "defaults": {},
     # --- single-option flips from default -----------------------------------
     "num_outputs_2": {"num_outputs": 2},

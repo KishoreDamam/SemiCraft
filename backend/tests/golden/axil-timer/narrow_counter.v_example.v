@@ -1,0 +1,62 @@
+// SemiCraft v0.4.0
+// Example instantiation: axil_timer (config hash: 60dfc6337525)
+// An AXI4-Lite timer with a 4-bit down-counter and a 16-bit prescaler, running one-shot or periodically and raising a maskable interrupt on expiry.
+//
+// A compiling starting point, not an integration example: this wrapper
+// passes every port straight through. Replace its ports with your own
+// logic; what is guaranteed here is that the instantiation below is
+// correct for this configuration and lints clean against the IP.
+//
+// Generated code is provided as-is, without warranty of any kind. Free for
+// commercial and non-commercial use at the user's own risk.
+
+module axil_timer_example (
+    input  wire        aclk,
+    input  wire        areset_n,
+    input  wire [4:0]  awaddr,
+    input  wire        awvalid,
+    output wire        awready,
+    input  wire [31:0] wdata,
+    input  wire [3:0]  wstrb,
+    input  wire        wvalid,
+    output wire        wready,
+    output wire [1:0]  bresp,
+    output wire        bvalid,
+    input  wire        bready,
+    input  wire [4:0]  araddr,
+    input  wire        arvalid,
+    output wire        arready,
+    output wire [31:0] rdata,
+    output wire [1:0]  rresp,
+    output wire        rvalid,
+    input  wire        rready,
+    output wire        irq
+);
+
+    axil_timer u_axil_timer (
+        // Clocking
+        .aclk     (aclk),
+        .areset_n (areset_n),
+        // AXI4-Lite slave (bundle `s_axil`, axi4-lite target)
+        .awaddr   (awaddr),
+        .awvalid  (awvalid),
+        .awready  (awready),
+        .wdata    (wdata),
+        .wstrb    (wstrb),
+        .wvalid   (wvalid),
+        .wready   (wready),
+        .bresp    (bresp),
+        .bvalid   (bvalid),
+        .bready   (bready),
+        .araddr   (araddr),
+        .arvalid  (arvalid),
+        .arready  (arready),
+        .rdata    (rdata),
+        .rresp    (rresp),
+        .rvalid   (rvalid),
+        .rready   (rready),
+        // Interrupt
+        .irq      (irq)
+    );
+
+endmodule

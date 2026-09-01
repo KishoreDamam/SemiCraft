@@ -14,8 +14,11 @@ classes, no factory, no `config_db`, no phasing) verification components:
 - a **checker** module of procedural protocol checks,
 - an expected-value **scoreboard** class with an optional wrapper module.
 
-It is a standalone package, same shape as P3-05: it is **not** yet wired into
-`generate_files` — integration is a later WP. Unlike P3-05 (which emits
+**Wired in at P4-09** (see "Attaching a scaffold to a DUT" below): every
+AXI4-Lite IP now emits a `<module>_checks.sv` file whose monitors and checker
+are attached with SystemVerilog `bind`, and the run gate proves they fail a
+broken DUT. The paragraph this replaced said integration was "a later WP";
+that WP has landed. Unlike P3-05 (which emits
 `AssertProperty` nodes for `render_tb` to render later), this package owns
 its own tiny renderer and returns SV text directly — it does not add nodes to
 `semicraft_core/tb/nodes.py` and does not touch `render_tb.py`,
@@ -298,6 +301,11 @@ sb = ScoreboardSpec(
         module_name="req_ack_scoreboard_wrap", clock="clk",
         push_signal="req", push_expr="data",
         compare_signal="ack", compare_expr="data",
+        # `data` is referenced by push_expr/compare_expr but is not one of the
+        # three implicit ports (clock/push_signal/compare_signal), so it must be
+        # declared here or the emitted module will not compile. The opaque-text
+        # fields are never parsed, so the generator cannot infer it.
+        ports=[Signal("data", 8)],
     ),
 )
 print(generate_scoreboard(sb))
@@ -346,7 +354,8 @@ endclass
 module req_ack_scoreboard_wrap (
     input logic clk,
     input logic req,
-    input logic ack
+    input logic ack,
+    input logic [7:0] data
 );
 
     req_ack_scoreboard sb;
@@ -404,22 +413,116 @@ These three exact texts are asserted byte-for-byte by
   meaningfully. A caller wanting to scoreboard structured transactions should
   give the class a numeric summary field to compare, or accept the cosmetic
   formatting gap.
-- **`ScoreboardWrapper` uses `final begin ... end` to call `report()`.** This
-  is a standard SystemVerilog construct Verilator has supported for several
-  releases, but see below — it has not been exercised by an actual
-  Verilator run in this environment.
-- **Not compile-verified locally.** Verilator is not available on this
-  development host (see `CLAUDE.md`), so none of the SV this generator
-  produces — including the worked examples above — has been run through
-  `verilator --timing --binary` or any other SV compiler. The output has
-  been hand-reviewed for syntactic correctness and cross-checked against the
-  idioms `tb/render_tb.py` and `semicraft_core/assertions/generate.py`
-  already use, but "not compile-verified locally" should be read literally:
-  compile-checking this family end-to-end is deferred to the P3-09 CI gate
-  (or an earlier WP that wires a sandboxed Verilator run).
-- **Not wired into `generate_files`.** Like P3-05, this package is standalone
-  by design for this WP: no `ModuleDef`/`TbSpec` carries a
-  `MonitorSpec`/`CheckerSpec`/`ScoreboardSpec` yet, and `generate_files` does
-  not call into `semicraft_core.checkers`. Wiring these into the module
-  metadata surface and the generated-file pipeline is a later WP's decision,
-  not made here.
+- **`ScoreboardWrapper` uses `final begin ... end` to call `report()`.** A
+  standard SystemVerilog construct, now exercised by the compile gate below.
+- **Compile-verified (superseding this WP's original "not compile-verified"
+  note).** `backend/tests/checkers/test_compile.py` runs every family through
+  `verilator --timing --lint-only`: monitor with and without a qualifier,
+  checker with each check family and both reset polarities, and scoreboard
+  class-only, with a wrapper, and with non-trivial `push_expr`/`compare_expr`.
+  Verilator **is** available in Linux containers and in CI's lint-gate job, so
+  the gate runs there; it skips (never fails) where the binary is absent, such
+  as the Windows dev host.
+
+  `--lint-only`, not `--binary`: these scaffolds are standalone components, not
+  elaborable top-level designs with a stimulus process, so there is nothing to
+  execute. Lint-only still does full parse and elaboration checking, which is
+  the question this gate asks. Running them for real means instantiating them
+  against a DUT, which arrives with the wiring WP.
+
+  This gate found a genuine defect on its first run: the scoreboard-wrapper
+  example — in both the golden fixture and the worked example above — used
+  `push_expr="data"` without declaring `data` in `ScoreboardWrapper.ports`, so
+  the emitted module referenced an undeclared signal. The generator was
+  correct; the examples were not. Both are fixed, and a negative-control test
+  asserts that the omission still fails to compile, so the gate cannot rot into
+  a no-op.
+- **Wired into `generate_files` at P4-09.** An IP exposing
+  `verification_spec(opts)` gets a `<module>_checks.sv` emitted alongside its
+  RTL. `TbSpec` still carries no checker spec and `render_tb` is still
+  untouched — `bind` made that unnecessary, which is the main reason it was
+  chosen. See below.
+
+## Attaching a scaffold to a DUT (P4-09)
+
+A generated checker is worth nothing until something can fail because of it.
+Three things have to hold, and all three are now tested rather than assumed.
+
+**It attaches.** `semicraft_core.checkers.bind` emits SystemVerilog `bind`
+statements into the scaffold's own file. `bind` names the DUT module and
+connects to identifiers resolved in the *DUT's* scope, so nothing about the
+design or the testbench changes: no new TB node, no `TbSpec` field, no
+`render_tb` edit, and the generated testbench is byte-identical with or without
+a scaffold. The alternative — instantiating scaffolds from the testbench —
+would have meant changing a frozen contract (TB_SPEC) and every consumer of it,
+so a checker could see nets the DUT already exposes.
+
+The cost is that `bind` is SystemVerilog-only, so a Verilog-2001 build gets no
+scaffold file. The checks are simulation artifacts and the smoke testbench is
+SystemVerilog either way, so nothing usable is lost.
+
+**It can fail.** Verilator turns `$error` into an implicit `$stop` and aborts
+with a non-zero status, so a firing check makes `run_smoke` report `fail`.
+That is a fact about the simulator, not an assumption: it is what
+`backend/tests/ips/test_verification_run.py` demonstrates on a real IP.
+
+**It adds power.** This is the part that is easy to skip and easy to fake. The
+scaffold deliberately does *not* re-check reset values or field semantics — the
+directed testbench and its SVA already cover those. It checks what a directed
+vector sequence structurally cannot: liveness (every `awvalid` is followed by
+`bvalid`) and read-data stability (`rdata`/`rresp` do not move on cycles when
+no read was accepted). A directed read samples one cycle and never looks again,
+so a target that spuriously rewrote its read register between transactions is
+invisible to it. The `rdata_churns` mutation does exactly that and is run
+twice, with and without the scaffold: the testbench passes, the scaffold fails.
+That pair is the evidence — a mutation that fails both ways would only prove
+the testbench works.
+
+The memory IPs (`sync-fifo`, `sync-ram`) get a scaffold of their own — one
+monitor and one check, that read data does not move while the read enable is
+low — because they have no bus but do have a read register behind an enable. A
+RAM configured with `read_enable=False` has no gate and therefore no property,
+so it returns an empty spec and gets no file at all.
+
+**Where a check does *not* add power, stated plainly.** Two do not.
+
+*Liveness*: SemiCraft's directed sequences check the response cycle of every
+transaction, so a lost response is caught by the testbench first and the
+latency check never reaches 16 cycles.
+
+*Read-hold*: two separate attempts to find a mutation the RAM's directed
+testbench could not see both failed. Deleting the `if (re)` gate is caught
+because the next cycle's address overwrites the word about to be sampled;
+narrowing it to invert `dout` only while `re` is low is also caught, because
+the testbench reads `dout` on a cycle whose previous cycle had `re` low. That
+is a hold check, and the testbench deserves the credit.
+
+For both, the value is the file a user reuses in their own, more sparsely
+checked bench, and both are proven functional the same way: the gate silences
+the testbench's `$fatal` calls first, turning it into a pure stimulus
+generator, so the scaffold is the only thing left in the compile that can stop
+the run.
+
+**Restyling.** An IP's `verification_spec(opts)` never sees the render style,
+so it speaks canonical names and `semicraft_core.checkers.restyle` maps them
+through the same name map the RTL and testbench use. This is not an
+exotic-configuration concern: AXI4-Lite fixes its reset active-low and
+`build_name_map` appends `_n`, so `areset` → `areset_n` happens at the
+*default* configuration. A scaffold that skipped restyling would bind to
+undefined nets out of the box. P3-05a found this exact bug once already in the
+assertion path.
+
+Only **bare identifiers** are renamed: `"bvalid"` is, `"bvalid && bready"` is
+not, because renaming inside expression text would mean parsing SystemVerilog.
+`ips.verification.check_spec_is_restylable` refuses to ship a catalog spec
+containing an expression in one of those fields, so the limitation is
+unreachable by accident rather than merely documented.
+
+**No scoreboard on the AXI scaffold.** An expected-value scoreboard needs a
+model of what the next value should be. For an AXI register block that model is
+`RegisterModel`, which lives in Python and drives the directed testbench —
+there is nothing inside the DUT's scope to compare against, and pushing a
+hardware-derived "expected" value would compare the design against itself. A
+scoreboard belongs where ordering is the property: a FIFO, where data out must
+equal data in, in order. That is recorded as the next place to use it rather
+than faked here.
