@@ -145,6 +145,130 @@ Timing: clocked by `aclk`, reset by `areset_n`.
 | `tx` | `uart_tx` | output |
 | `rx` | `uart_rx` | input |
 
+## Timing
+
+Rendered from the same directed testbench recipe the smoke simulation runs in CI, so this diagram cannot drift from the behaviour the tests verify.
+
+Inputs are shown as the testbench drives them. Outputs are shown only on the cycles it checks them; `x` means the testbench pins no value there, not that the signal is undefined in hardware.
+
+Showing the first 40 of 344 directed cycles.
+
+```wavedrom
+{
+  "signal": [
+    {
+      "name": "aclk",
+      "wave": "p........................................."
+    },
+    {
+      "name": "areset_n",
+      "wave": "0.1......................................."
+    },
+    {},
+    {
+      "name": "awaddr",
+      "wave": "=....=....................................",
+      "data": [
+        "0x0",
+        "0x4"
+      ]
+    },
+    {
+      "name": "awvalid",
+      "wave": "0....10..................................."
+    },
+    {
+      "name": "wdata",
+      "wave": "=....=....................................",
+      "data": [
+        "0x0",
+        "0x4B"
+      ]
+    },
+    {
+      "name": "wstrb",
+      "wave": "=....=....................................",
+      "data": [
+        "0x0",
+        "0xF"
+      ]
+    },
+    {
+      "name": "wvalid",
+      "wave": "0....10..................................."
+    },
+    {
+      "name": "bready",
+      "wave": "0....1...................................."
+    },
+    {
+      "name": "araddr",
+      "wave": "=..=....=.................................",
+      "data": [
+        "0x0",
+        "0xC",
+        "0x0"
+      ]
+    },
+    {
+      "name": "arvalid",
+      "wave": "0..10...10................................"
+    },
+    {
+      "name": "rready",
+      "wave": "0..1......................................"
+    },
+    {
+      "name": "uart_rx",
+      "wave": "0.1......................................."
+    },
+    {},
+    {
+      "name": "bresp",
+      "wave": "xxxxxxx=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "data": [
+        "0x0"
+      ]
+    },
+    {
+      "name": "bvalid",
+      "wave": "xx0xxxx10xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "rdata",
+      "wave": "xxxx=xxxx=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "data": [
+        "0x10",
+        "0x1"
+      ]
+    },
+    {
+      "name": "rresp",
+      "wave": "xxxx=xxxx=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "data": [
+        "0x0",
+        "0x0"
+      ]
+    },
+    {
+      "name": "rvalid",
+      "wave": "xx0x1xxxx1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "uart_tx",
+      "wave": "xx1xxxxxx0xxxxxxxxxxxxxxx1xxxxxxxxxxxxxxx1"
+    }
+  ],
+  "head": {
+    "text": "axil_uart \u2014 directed sequence",
+    "tick": 0
+  },
+  "config": {
+    "hscale": 1
+  }
+}
+```
+
 ## Configuration
 
 - Reset baud divisor: 16 clocks per bit (BAUDDIV is writable at run time)

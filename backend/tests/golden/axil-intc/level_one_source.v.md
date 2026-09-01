@@ -120,6 +120,151 @@ Timing: clocked by `aclk`, reset by `areset_n`.
 | `rvalid` | `rvalid` | output |
 | `rready` | `rready` | input |
 
+## Timing
+
+Rendered from the same directed testbench recipe the smoke simulation runs in CI, so this diagram cannot drift from the behaviour the tests verify.
+
+Inputs are shown as the testbench drives them. Outputs are shown only on the cycles it checks them; `x` means the testbench pins no value there, not that the signal is undefined in hardware.
+
+Showing the first 40 of 41 directed cycles.
+
+```wavedrom
+{
+  "signal": [
+    {
+      "name": "aclk",
+      "wave": "p........................................."
+    },
+    {
+      "name": "areset_n",
+      "wave": "0.1......................................."
+    },
+    {},
+    {
+      "name": "awaddr",
+      "wave": "=..........=....=....=........=........=..",
+      "data": [
+        "0x0",
+        "0x4",
+        "0x0",
+        "0x4",
+        "0x0",
+        "0x4"
+      ]
+    },
+    {
+      "name": "awvalid",
+      "wave": "0..........10...10...10.......10.......10."
+    },
+    {
+      "name": "wdata",
+      "wave": "=..........=.........=........=........=..",
+      "data": [
+        "0x0",
+        "0x1",
+        "0x0",
+        "0x1",
+        "0x2"
+      ]
+    },
+    {
+      "name": "wstrb",
+      "wave": "=..........=..............................",
+      "data": [
+        "0x0",
+        "0xF"
+      ]
+    },
+    {
+      "name": "wvalid",
+      "wave": "0..........10...10...10.......10.......10."
+    },
+    {
+      "name": "bready",
+      "wave": "0..........1.............................."
+    },
+    {
+      "name": "araddr",
+      "wave": "=........=.........=......................",
+      "data": [
+        "0x0",
+        "0x8",
+        "0x0"
+      ]
+    },
+    {
+      "name": "arvalid",
+      "wave": "0....101010...10...10.......10.......10..."
+    },
+    {
+      "name": "rready",
+      "wave": "0....1...................................."
+    },
+    {
+      "name": "irq_in",
+      "wave": "0..1.0..................1..............0.."
+    },
+    {},
+    {
+      "name": "bresp",
+      "wave": "xxxxxxxxxxxxx=xxxx=xxxx=xxxxxxxx=xxxxxxxx=",
+      "data": [
+        "0x0",
+        "0x0",
+        "0x0",
+        "0x0",
+        "0x2"
+      ]
+    },
+    {
+      "name": "bvalid",
+      "wave": "xx0xxxxxxxxxx10xxx10xxx10xxxxxxx10xxxxxxx1"
+    },
+    {
+      "name": "rdata",
+      "wave": "xxxxxx=x=x=xxxx=xxxx=xxxxxxxx=xxxxxxxx=xxx",
+      "data": [
+        "0x0",
+        "0x1",
+        "0x0",
+        "0x1",
+        "0x0",
+        "0x1",
+        "0x1"
+      ]
+    },
+    {
+      "name": "rresp",
+      "wave": "xxxxxx=x=x=xxxx=xxxx=xxxxxxxx=xxxxxxxx=xxx",
+      "data": [
+        "0x0",
+        "0x0",
+        "0x0",
+        "0x0",
+        "0x0",
+        "0x0",
+        "0x0"
+      ]
+    },
+    {
+      "name": "rvalid",
+      "wave": "xx0xxx1x1x1xxxx1xxxx1xxxxxxxx1xxxxxxxx1xxx"
+    },
+    {
+      "name": "irq_out",
+      "wave": "xx0xxxxxxxxxx1xxxx0xxxx0xxxxxxxx0xxxxxxxx0"
+    }
+  ],
+  "head": {
+    "text": "axil_intc \u2014 directed sequence",
+    "tick": 0
+  },
+  "config": {
+    "hscale": 1
+  }
+}
+```
+
 ## Configuration
 
 - Sources: 1

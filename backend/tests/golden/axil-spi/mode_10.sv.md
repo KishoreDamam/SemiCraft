@@ -158,6 +158,131 @@ Timing: clocked by `aclk`, reset by `areset_n`.
 | `miso` | `miso` | input |
 | `cs_n` | `cs_n` | output |
 
+## Timing
+
+Rendered from the same directed testbench recipe the smoke simulation runs in CI, so this diagram cannot drift from the behaviour the tests verify.
+
+Inputs are shown as the testbench drives them. Outputs are shown only on the cycles it checks them; `x` means the testbench pins no value there, not that the signal is undefined in hardware.
+
+Showing the first 40 of 53 directed cycles.
+
+```wavedrom
+{
+  "signal": [
+    {
+      "name": "aclk",
+      "wave": "p........................................."
+    },
+    {
+      "name": "areset_n",
+      "wave": "0.1......................................."
+    },
+    {},
+    {
+      "name": "awaddr",
+      "wave": "=.=...=...................................",
+      "data": [
+        "0x0",
+        "0x4",
+        "0x8"
+      ]
+    },
+    {
+      "name": "awvalid",
+      "wave": "0.10..10.................................."
+    },
+    {
+      "name": "wdata",
+      "wave": "=.=...=...................................",
+      "data": [
+        "0x0",
+        "0x1",
+        "0x4B"
+      ]
+    },
+    {
+      "name": "wstrb",
+      "wave": "=.=.......................................",
+      "data": [
+        "0x0",
+        "0xF"
+      ]
+    },
+    {
+      "name": "wvalid",
+      "wave": "0.10..10.................................."
+    },
+    {
+      "name": "bready",
+      "wave": "0.1......................................."
+    },
+    {
+      "name": "araddr",
+      "wave": "=.........................................",
+      "data": [
+        "0x0"
+      ]
+    },
+    {
+      "name": "arvalid",
+      "wave": "0........................................."
+    },
+    {
+      "name": "rready",
+      "wave": "0........................................."
+    },
+    {
+      "name": "miso",
+      "wave": "0...............1...0...1.......0...1....."
+    },
+    {},
+    {
+      "name": "bresp",
+      "wave": "xxxx=xxx=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "data": [
+        "0x0",
+        "0x0"
+      ]
+    },
+    {
+      "name": "bvalid",
+      "wave": "xx0x10xx10xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "rdata",
+      "wave": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "rresp",
+      "wave": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "rvalid",
+      "wave": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "sclk",
+      "wave": "xx1xxxxxxxx0x1xxxxxxxxxxxxxxxxxxxxxxxxxxx1"
+    },
+    {
+      "name": "mosi",
+      "wave": "xxxxxxxxxx0xxx1xxx0xxx0xxx1xxx0xxx1xxx1xxx"
+    },
+    {
+      "name": "cs_n",
+      "wave": "xx1x0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+  ],
+  "head": {
+    "text": "axil_spi \u2014 directed sequence",
+    "tick": 0
+  },
+  "config": {
+    "hscale": 1
+  }
+}
+```
+
 ## Configuration
 
 - SPI mode: 10 (CPOL=1, CPHA=0)

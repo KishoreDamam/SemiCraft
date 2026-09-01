@@ -51,6 +51,52 @@ Timing: clocked by `clk`.
 | `re` | `re` | input |
 | `rdata` | `dout` | output |
 
+## Timing
+
+Rendered from the same directed testbench recipe the smoke simulation runs in CI, so this diagram cannot drift from the behaviour the tests verify.
+
+Inputs are shown as the testbench drives them. Outputs are shown only on the cycles it checks them; `x` means the testbench pins no value there, not that the signal is undefined in hardware.
+
+```wavedrom
+{
+  "signal": [
+    {
+      "name": "clk",
+      "wave": "p........."
+    },
+    {},
+    {
+      "name": "addr",
+      "wave": "0101.0.1.."
+    },
+    {
+      "name": "we",
+      "wave": "1.0..10..."
+    },
+    {
+      "name": "din",
+      "wave": "10........"
+    },
+    {
+      "name": "re",
+      "wave": "0.1....0.."
+    },
+    {},
+    {
+      "name": "dout",
+      "wave": "xxx10x10.x"
+    }
+  ],
+  "head": {
+    "text": "sync_ram \u2014 directed sequence",
+    "tick": 0
+  },
+  "config": {
+    "hscale": 1
+  }
+}
+```
+
 ## Configuration
 
 - Width: 1 bits

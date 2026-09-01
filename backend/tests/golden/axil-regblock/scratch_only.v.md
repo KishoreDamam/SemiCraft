@@ -95,6 +95,148 @@ Timing: clocked by `aclk`, reset by `areset_n`.
 | `rvalid` | `rvalid` | output |
 | `rready` | `rready` | input |
 
+## Timing
+
+Rendered from the same directed testbench recipe the smoke simulation runs in CI, so this diagram cannot drift from the behaviour the tests verify.
+
+Inputs are shown as the testbench drives them. Outputs are shown only on the cycles it checks them; `x` means the testbench pins no value there, not that the signal is undefined in hardware.
+
+```wavedrom
+{
+  "signal": [
+    {
+      "name": "aclk",
+      "wave": "p................."
+    },
+    {
+      "name": "areset_n",
+      "wave": "0.1..............."
+    },
+    {},
+    {
+      "name": "awaddr",
+      "wave": "=.................",
+      "data": [
+        "0x0"
+      ]
+    },
+    {
+      "name": "awvalid",
+      "wave": "0..10.....10.10..."
+    },
+    {
+      "name": "wdata",
+      "wave": "=..=......=..=....",
+      "data": [
+        "0x0",
+        "0xFFFFFFFF",
+        "0xA0A1A2A3",
+        "0x5F5E5D5C"
+      ]
+    },
+    {
+      "name": "wstrb",
+      "wave": "=..=.........=....",
+      "data": [
+        "0x0",
+        "0xF",
+        "0x5"
+      ]
+    },
+    {
+      "name": "wvalid",
+      "wave": "0..10.....10.10..."
+    },
+    {
+      "name": "bready",
+      "wave": "0..1.............."
+    },
+    {
+      "name": "araddr",
+      "wave": "=.......=.......=.",
+      "data": [
+        "0x0",
+        "0x1",
+        "0x0"
+      ]
+    },
+    {
+      "name": "arvalid",
+      "wave": "0.....1010......10"
+    },
+    {
+      "name": "rready",
+      "wave": "0.....1..........."
+    },
+    {},
+    {
+      "name": "awready",
+      "wave": "xx1xxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "wready",
+      "wave": "xx1xxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "bresp",
+      "wave": "xxxxx=xxxxxx=xx=xx",
+      "data": [
+        "0x0",
+        "0x0",
+        "0x0"
+      ]
+    },
+    {
+      "name": "bvalid",
+      "wave": "xx0xx10xxxxx10x10x"
+    },
+    {
+      "name": "arready",
+      "wave": "xx1xxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "rdata",
+      "wave": "xxxxxxx=x=xxxxxxx=",
+      "data": [
+        "0xFFFFFFFF",
+        "0x0",
+        "0xA05EA25C"
+      ]
+    },
+    {
+      "name": "rresp",
+      "wave": "xxxxxxx=x=xxxxxxx=",
+      "data": [
+        "0x0",
+        "0x2",
+        "0x0"
+      ]
+    },
+    {
+      "name": "rvalid",
+      "wave": "xx0xxxx1x1xxxxxxx1"
+    },
+    {
+      "name": "scratch_value",
+      "wave": "xx=xx=xxxxxx=xx=xx",
+      "data": [
+        "0x0",
+        "0xFFFFFFFF",
+        "0xA0A1A2A3",
+        "0xA05EA25C"
+      ]
+    }
+  ],
+  "head": {
+    "text": "axil_regblock \u2014 directed sequence",
+    "tick": 0
+  },
+  "config": {
+    "hscale": 1
+  }
+}
+```
+
 ## Configuration
 
 - Data width: 32 bits (4-byte address stride)

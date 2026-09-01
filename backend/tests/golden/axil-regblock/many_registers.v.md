@@ -209,6 +209,265 @@ Timing: clocked by `aclk`, reset by `areset_n`.
 | `rvalid` | `rvalid` | output |
 | `rready` | `rready` | input |
 
+## Timing
+
+Rendered from the same directed testbench recipe the smoke simulation runs in CI, so this diagram cannot drift from the behaviour the tests verify.
+
+Inputs are shown as the testbench drives them. Outputs are shown only on the cycles it checks them; `x` means the testbench pins no value there, not that the signal is undefined in hardware.
+
+```wavedrom
+{
+  "signal": [
+    {
+      "name": "aclk",
+      "wave": "p.................................."
+    },
+    {
+      "name": "areset_n",
+      "wave": "0.1................................"
+    },
+    {},
+    {
+      "name": "awaddr",
+      "wave": "=..............=....=.........=....",
+      "data": [
+        "0x0",
+        "0x10",
+        "0x20",
+        "0x18"
+      ]
+    },
+    {
+      "name": "awvalid",
+      "wave": "0..10.....10...10...10.10.....10..."
+    },
+    {
+      "name": "wdata",
+      "wave": "=..=......=.........=..=......=....",
+      "data": [
+        "0x0",
+        "0xF6",
+        "0x8",
+        "0xA0A1A2A3",
+        "0x5F5E5D5C",
+        "0xF"
+      ]
+    },
+    {
+      "name": "wstrb",
+      "wave": "=..=...................=......=....",
+      "data": [
+        "0x0",
+        "0xF",
+        "0x5",
+        "0xF"
+      ]
+    },
+    {
+      "name": "wvalid",
+      "wave": "0..10.....10...10...10.10.....10..."
+    },
+    {
+      "name": "bready",
+      "wave": "0..1..............................."
+    },
+    {
+      "name": "araddr",
+      "wave": "=.......=.........=.......=.=....=.",
+      "data": [
+        "0x0",
+        "0x1",
+        "0x10",
+        "0x20",
+        "0x8",
+        "0x18"
+      ]
+    },
+    {
+      "name": "arvalid",
+      "wave": "0.....1010........10......1010...10"
+    },
+    {
+      "name": "rready",
+      "wave": "0.....1............................"
+    },
+    {
+      "name": "status0_busy",
+      "wave": "0...........................1......"
+    },
+    {
+      "name": "status0_code",
+      "wave": "=...........................=......",
+      "data": [
+        "0x0",
+        "0xF"
+      ]
+    },
+    {
+      "name": "irq0_flags_set",
+      "wave": "=............==....................",
+      "data": [
+        "0x0",
+        "0xF",
+        "0x0"
+      ]
+    },
+    {},
+    {
+      "name": "awready",
+      "wave": "xx1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "wready",
+      "wave": "xx1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "bresp",
+      "wave": "xxxxx=xxxxxx=xxxx=xxxx=xx=xxxxxx=xx",
+      "data": [
+        "0x0",
+        "0x2",
+        "0x0",
+        "0x0",
+        "0x0",
+        "0x0"
+      ]
+    },
+    {
+      "name": "bvalid",
+      "wave": "xx0xx10xxxxx10xxx10xxx10x10xxxxx10x"
+    },
+    {
+      "name": "arready",
+      "wave": "xx1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "rdata",
+      "wave": "xxxxxxx=x=xxxxxxxxx=xxxxxxx=x=xxxx=",
+      "data": [
+        "0xF6",
+        "0x0",
+        "0x7",
+        "0xA05EA25C",
+        "0xF1",
+        "0x0"
+      ]
+    },
+    {
+      "name": "rresp",
+      "wave": "xxxxxxx=x=xxxxxxxxx=xxxxxxx=x=xxxx=",
+      "data": [
+        "0x0",
+        "0x2",
+        "0x0",
+        "0x0",
+        "0x0",
+        "0x0"
+      ]
+    },
+    {
+      "name": "rvalid",
+      "wave": "xx0xxxx1x1xxxxxxxxx1xxxxxxx1x1xxxx1"
+    },
+    {
+      "name": "ctrl0_enable",
+      "wave": "xx1xx0xxxxxx0xxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "ctrl0_mode",
+      "wave": "xx=xx=xxxxxx=xxxxxxxxxxxxxxxxxxxxxx",
+      "data": [
+        "0x0",
+        "0x3",
+        "0x3"
+      ]
+    },
+    {
+      "name": "ctrl0_level",
+      "wave": "xx=xx=xxxxxx=xxxxxxxxxxxxxxxxxxxxxx",
+      "data": [
+        "0x0",
+        "0xF",
+        "0xF"
+      ]
+    },
+    {
+      "name": "ctrl1_enable",
+      "wave": "xx1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "ctrl1_mode",
+      "wave": "xx=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "data": [
+        "0x0"
+      ]
+    },
+    {
+      "name": "ctrl1_level",
+      "wave": "xx=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "data": [
+        "0x0"
+      ]
+    },
+    {
+      "name": "irq0_flags",
+      "wave": "xx=xxxxxxxxxxx=xx=xxxxxxxxxxxxxxxxx",
+      "data": [
+        "0x0",
+        "0xF",
+        "0x7"
+      ]
+    },
+    {
+      "name": "irq1_flags",
+      "wave": "xx=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "data": [
+        "0x0"
+      ]
+    },
+    {
+      "name": "cmd0_go",
+      "wave": "xx0xxxxxxxxxxxxxxxxxxxxxxxxxxxxx1xx"
+    },
+    {
+      "name": "cmd0_code",
+      "wave": "xx=xxxxxxxxxxxxxxxxxxxxxxxxxxxxx=xx",
+      "data": [
+        "0x0",
+        "0x7"
+      ]
+    },
+    {
+      "name": "cmd1_go",
+      "wave": "xx0xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "cmd1_code",
+      "wave": "xx=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "data": [
+        "0x0"
+      ]
+    },
+    {
+      "name": "scratch_value",
+      "wave": "xx=xxxxxxxxxxxxxxxxxxx=xx=xxxxxxxxx",
+      "data": [
+        "0x0",
+        "0xA0A1A2A3",
+        "0xA05EA25C"
+      ]
+    }
+  ],
+  "head": {
+    "text": "axil_regblock \u2014 directed sequence",
+    "tick": 0
+  },
+  "config": {
+    "hscale": 1
+  }
+}
+```
+
 ## Configuration
 
 - Data width: 32 bits (4-byte address stride)

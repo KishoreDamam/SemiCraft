@@ -164,6 +164,131 @@ Timing: clocked by `aclk`, reset by `areset_n`.
 | `sda_oe` | `sda_oe` | output |
 | `sda_in` | `sda_in` | input |
 
+## Timing
+
+Rendered from the same directed testbench recipe the smoke simulation runs in CI, so this diagram cannot drift from the behaviour the tests verify.
+
+Inputs are shown as the testbench drives them. Outputs are shown only on the cycles it checks them; `x` means the testbench pins no value there, not that the signal is undefined in hardware.
+
+Showing the first 40 of 475 directed cycles.
+
+```wavedrom
+{
+  "signal": [
+    {
+      "name": "aclk",
+      "wave": "p........................................."
+    },
+    {
+      "name": "areset_n",
+      "wave": "0.1......................................."
+    },
+    {},
+    {
+      "name": "awaddr",
+      "wave": "=..=..=...................................",
+      "data": [
+        "0x0",
+        "0x8",
+        "0x4"
+      ]
+    },
+    {
+      "name": "awvalid",
+      "wave": "0..10.10.................................."
+    },
+    {
+      "name": "wdata",
+      "wave": "=..=..=...................................",
+      "data": [
+        "0x0",
+        "0x4B",
+        "0x13"
+      ]
+    },
+    {
+      "name": "wstrb",
+      "wave": "=..=......................................",
+      "data": [
+        "0x0",
+        "0xF"
+      ]
+    },
+    {
+      "name": "wvalid",
+      "wave": "0..10.10.................................."
+    },
+    {
+      "name": "bready",
+      "wave": "0..1......................................"
+    },
+    {
+      "name": "araddr",
+      "wave": "=.........................................",
+      "data": [
+        "0x0"
+      ]
+    },
+    {
+      "name": "arvalid",
+      "wave": "0........................................."
+    },
+    {
+      "name": "rready",
+      "wave": "0........................................."
+    },
+    {
+      "name": "scl_in",
+      "wave": "0.1..................................0...."
+    },
+    {
+      "name": "sda_in",
+      "wave": "0.1......................................."
+    },
+    {},
+    {
+      "name": "bresp",
+      "wave": "xxxxx=xx=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "data": [
+        "0x0",
+        "0x0"
+      ]
+    },
+    {
+      "name": "bvalid",
+      "wave": "xx0xx10x10xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "rdata",
+      "wave": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "rresp",
+      "wave": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "rvalid",
+      "wave": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "scl_oe",
+      "wave": "xx0xxxxxx0xxxx0xxxx0xxxx1xxxx1xxxx0xxxx0xx"
+    },
+    {
+      "name": "sda_oe",
+      "wave": "xx0xxxxxx0xxxx0xxxx1xxxx1xxxx1xxxx1xxxx1xx"
+    }
+  ],
+  "head": {
+    "text": "axil_i2c \u2014 directed sequence",
+    "tick": 0
+  },
+  "config": {
+    "hscale": 1
+  }
+}
+```
+
 ## Configuration
 
 - Quarter-period divisor: 5 aclk cycles (an SCL period is four times this; CLKDIV is writable at run time)

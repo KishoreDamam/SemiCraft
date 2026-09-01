@@ -142,6 +142,210 @@ Timing: clocked by `aclk`, reset by `areset_n`.
 | `rvalid` | `rvalid` | output |
 | `rready` | `rready` | input |
 
+## Timing
+
+Rendered from the same directed testbench recipe the smoke simulation runs in CI, so this diagram cannot drift from the behaviour the tests verify.
+
+Inputs are shown as the testbench drives them. Outputs are shown only on the cycles it checks them; `x` means the testbench pins no value there, not that the signal is undefined in hardware.
+
+```wavedrom
+{
+  "signal": [
+    {
+      "name": "aclk",
+      "wave": "p.........................."
+    },
+    {
+      "name": "areset_n",
+      "wave": "0.1........................"
+    },
+    {},
+    {
+      "name": "awaddr",
+      "wave": "=..............=......=....",
+      "data": [
+        "0x0",
+        "0x8",
+        "0xC"
+      ]
+    },
+    {
+      "name": "awvalid",
+      "wave": "0..10.....10...10.....10..."
+    },
+    {
+      "name": "wdata",
+      "wave": "=..=......=...........=....",
+      "data": [
+        "0x0",
+        "0xF6",
+        "0x8",
+        "0xF"
+      ]
+    },
+    {
+      "name": "wstrb",
+      "wave": "=..=.......................",
+      "data": [
+        "0x0",
+        "0xF"
+      ]
+    },
+    {
+      "name": "wvalid",
+      "wave": "0..10.....10...10.....10..."
+    },
+    {
+      "name": "bready",
+      "wave": "0..1......................."
+    },
+    {
+      "name": "araddr",
+      "wave": "=.......=.........=.=....=.",
+      "data": [
+        "0x0",
+        "0x1",
+        "0x8",
+        "0x4",
+        "0xC"
+      ]
+    },
+    {
+      "name": "arvalid",
+      "wave": "0.....1010........1010...10"
+    },
+    {
+      "name": "rready",
+      "wave": "0.....1...................."
+    },
+    {
+      "name": "status0_busy",
+      "wave": "0...................1......"
+    },
+    {
+      "name": "status0_code",
+      "wave": "=...................=......",
+      "data": [
+        "0x0",
+        "0xF"
+      ]
+    },
+    {
+      "name": "irq0_flags_set",
+      "wave": "=............==............",
+      "data": [
+        "0x0",
+        "0xF",
+        "0x0"
+      ]
+    },
+    {},
+    {
+      "name": "awready",
+      "wave": "xx1xxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "wready",
+      "wave": "xx1xxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "bresp",
+      "wave": "xxxxx=xxxxxx=xxxx=xxxxxx=xx",
+      "data": [
+        "0x0",
+        "0x2",
+        "0x0",
+        "0x0"
+      ]
+    },
+    {
+      "name": "bvalid",
+      "wave": "xx0xx10xxxxx10xxx10xxxxx10x"
+    },
+    {
+      "name": "arready",
+      "wave": "xx1xxxxxxxxxxxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "rdata",
+      "wave": "xxxxxxx=x=xxxxxxxxx=x=xxxx=",
+      "data": [
+        "0xF6",
+        "0x0",
+        "0x7",
+        "0xF1",
+        "0x0"
+      ]
+    },
+    {
+      "name": "rresp",
+      "wave": "xxxxxxx=x=xxxxxxxxx=x=xxxx=",
+      "data": [
+        "0x0",
+        "0x2",
+        "0x0",
+        "0x0",
+        "0x0"
+      ]
+    },
+    {
+      "name": "rvalid",
+      "wave": "xx0xxxx1x1xxxxxxxxx1x1xxxx1"
+    },
+    {
+      "name": "ctrl0_enable",
+      "wave": "xx1xx0xxxxxx0xxxxxxxxxxxxxx"
+    },
+    {
+      "name": "ctrl0_mode",
+      "wave": "xx=xx=xxxxxx=xxxxxxxxxxxxxx",
+      "data": [
+        "0x0",
+        "0x3",
+        "0x3"
+      ]
+    },
+    {
+      "name": "ctrl0_level",
+      "wave": "xx=xx=xxxxxx=xxxxxxxxxxxxxx",
+      "data": [
+        "0x0",
+        "0xF",
+        "0xF"
+      ]
+    },
+    {
+      "name": "irq0_flags",
+      "wave": "xx=xxxxxxxxxxx=xx=xxxxxxxxx",
+      "data": [
+        "0x0",
+        "0xF",
+        "0x7"
+      ]
+    },
+    {
+      "name": "cmd0_go",
+      "wave": "xx0xxxxxxxxxxxxxxxxxxxxx1xx"
+    },
+    {
+      "name": "cmd0_code",
+      "wave": "xx=xxxxxxxxxxxxxxxxxxxxx=xx",
+      "data": [
+        "0x0",
+        "0x7"
+      ]
+    }
+  ],
+  "head": {
+    "text": "axil_regblock \u2014 directed sequence",
+    "tick": 0
+  },
+  "config": {
+    "hscale": 1
+  }
+}
+```
+
 ## Configuration
 
 - Data width: 32 bits (4-byte address stride)

@@ -115,6 +115,151 @@ Timing: clocked by `aclk`, reset by `areset_n`.
 | `rvalid` | `rvalid` | output |
 | `rready` | `rready` | input |
 
+## Timing
+
+Rendered from the same directed testbench recipe the smoke simulation runs in CI, so this diagram cannot drift from the behaviour the tests verify.
+
+Inputs are shown as the testbench drives them. Outputs are shown only on the cycles it checks them; `x` means the testbench pins no value there, not that the signal is undefined in hardware.
+
+```wavedrom
+{
+  "signal": [
+    {
+      "name": "aclk",
+      "wave": "p................."
+    },
+    {
+      "name": "areset_n",
+      "wave": "0.1..............."
+    },
+    {},
+    {
+      "name": "awaddr",
+      "wave": "=.....=...........",
+      "data": [
+        "0x0",
+        "0x4"
+      ]
+    },
+    {
+      "name": "awvalid",
+      "wave": "0..10.10.........."
+    },
+    {
+      "name": "wdata",
+      "wave": "=..=..=...........",
+      "data": [
+        "0x0",
+        "0xFFFFFFFF",
+        "0xA5A5A5A5"
+      ]
+    },
+    {
+      "name": "wstrb",
+      "wave": "=..=..............",
+      "data": [
+        "0x0",
+        "0xF"
+      ]
+    },
+    {
+      "name": "wvalid",
+      "wave": "0..10.10.........."
+    },
+    {
+      "name": "bready",
+      "wave": "0..1.............."
+    },
+    {
+      "name": "araddr",
+      "wave": "=...........=.....",
+      "data": [
+        "0x0",
+        "0x8"
+      ]
+    },
+    {
+      "name": "arvalid",
+      "wave": "0........10.10..10"
+    },
+    {
+      "name": "rready",
+      "wave": "0........1........"
+    },
+    {
+      "name": "gpio_in",
+      "wave": "=..........=......",
+      "data": [
+        "0x0",
+        "0x5A5A5A5A"
+      ]
+    },
+    {},
+    {
+      "name": "awready",
+      "wave": "xx1xxxxxxxxxxxxxxx"
+    },
+    {
+      "name": "bresp",
+      "wave": "xxxxx=xx=xxxxxxxxx",
+      "data": [
+        "0x0",
+        "0x0"
+      ]
+    },
+    {
+      "name": "bvalid",
+      "wave": "xx0xx10x10xxxxxxxx"
+    },
+    {
+      "name": "rdata",
+      "wave": "xxxxxxxxxx=xx=xxx=",
+      "data": [
+        "0xFFFFFFFF",
+        "0x0",
+        "0x5A5A5A5A"
+      ]
+    },
+    {
+      "name": "rresp",
+      "wave": "xxxxxxxxxx=xx=xxx=",
+      "data": [
+        "0x0",
+        "0x0",
+        "0x0"
+      ]
+    },
+    {
+      "name": "rvalid",
+      "wave": "xx0xxxxxxx1xx1xxx1"
+    },
+    {
+      "name": "gpio_out",
+      "wave": "xx=xxxxx=xxxxxxxxx",
+      "data": [
+        "0x0",
+        "0xA5A5A5A5"
+      ]
+    },
+    {
+      "name": "gpio_oe",
+      "wave": "xx=xx=xxxxxxxxxxxx",
+      "data": [
+        "0x0",
+        "0xFFFFFFFF"
+      ]
+    }
+  ],
+  "head": {
+    "text": "axil_gpio \u2014 directed sequence",
+    "tick": 0
+  },
+  "config": {
+    "hscale": 1
+  }
+}
+```
+
 ## Configuration
 
 - Pins: 32

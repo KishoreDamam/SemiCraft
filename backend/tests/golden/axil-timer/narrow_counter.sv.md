@@ -143,6 +143,142 @@ Timing: clocked by `aclk`, reset by `areset_n`.
 | `rvalid` | `rvalid` | output |
 | `rready` | `rready` | input |
 
+## Timing
+
+Rendered from the same directed testbench recipe the smoke simulation runs in CI, so this diagram cannot drift from the behaviour the tests verify.
+
+Inputs are shown as the testbench drives them. Outputs are shown only on the cycles it checks them; `x` means the testbench pins no value there, not that the signal is undefined in hardware.
+
+Showing the first 40 of 78 directed cycles.
+
+```wavedrom
+{
+  "signal": [
+    {
+      "name": "aclk",
+      "wave": "p........................................."
+    },
+    {
+      "name": "areset_n",
+      "wave": "0.1......................................."
+    },
+    {},
+    {
+      "name": "awaddr",
+      "wave": "=..=..=....=................=....=........",
+      "data": [
+        "0x0",
+        "0xC",
+        "0x4",
+        "0x0",
+        "0x10",
+        "0x0"
+      ]
+    },
+    {
+      "name": "awvalid",
+      "wave": "0..10.10...10............10.10...10......."
+    },
+    {
+      "name": "wdata",
+      "wave": "=..=..=....=.............=..=....=........",
+      "data": [
+        "0x0",
+        "0x1",
+        "0x3",
+        "0x7",
+        "0x0",
+        "0x1",
+        "0x5"
+      ]
+    },
+    {
+      "name": "wstrb",
+      "wave": "=..=......................................",
+      "data": [
+        "0x0",
+        "0xF"
+      ]
+    },
+    {
+      "name": "wvalid",
+      "wave": "0..10.10...10............10.10...10......."
+    },
+    {
+      "name": "bready",
+      "wave": "0..1......................................"
+    },
+    {
+      "name": "araddr",
+      "wave": "=........=.............=..................",
+      "data": [
+        "0x0",
+        "0x8",
+        "0x10"
+      ]
+    },
+    {
+      "name": "arvalid",
+      "wave": "0........10............10......10........."
+    },
+    {
+      "name": "rready",
+      "wave": "0........1................................"
+    },
+    {},
+    {
+      "name": "bresp",
+      "wave": "xxxxx=xx=xxxx=xxxxxxxxxxxxx=xx=xxxx=xxxxxx",
+      "data": [
+        "0x0",
+        "0x0",
+        "0x0",
+        "0x0",
+        "0x0",
+        "0x0"
+      ]
+    },
+    {
+      "name": "bvalid",
+      "wave": "xx0xx10x10xxx10xxxxxxxxxxxx10x10xxx10xxxxx"
+    },
+    {
+      "name": "rdata",
+      "wave": "xxxxxxxxxx=xxxxxxxxxxxxx=xxxxxxx=xxxxxxxxx",
+      "data": [
+        "0x3",
+        "0x1",
+        "0x0"
+      ]
+    },
+    {
+      "name": "rresp",
+      "wave": "xxxxxxxxxx=xxxxxxxxxxxxx=xxxxxxx=xxxxxxxxx",
+      "data": [
+        "0x0",
+        "0x0",
+        "0x0"
+      ]
+    },
+    {
+      "name": "rvalid",
+      "wave": "xx0xxxxxxx1xxxxxxxxxxxxx1xxxxxxx1xxxxxxxxx"
+    },
+    {
+      "name": "irq",
+      "wave": "xx0xx0xx0xxxx0xxxxxxx01xxxx0xx0xxxx0xxxxxx"
+    }
+  ],
+  "head": {
+    "text": "axil_timer \u2014 directed sequence",
+    "tick": 0
+  },
+  "config": {
+    "hscale": 1
+  }
+}
+```
+
 ## Configuration
 
 - Counter: 4 bits

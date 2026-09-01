@@ -64,6 +64,93 @@ Timing: clocked by `clk`, reset by `rst_n`.
 | `data` | `rd_data` | output |
 | `empty` | `empty` | output |
 
+## Timing
+
+Rendered from the same directed testbench recipe the smoke simulation runs in CI, so this diagram cannot drift from the behaviour the tests verify.
+
+Inputs are shown as the testbench drives them. Outputs are shown only on the cycles it checks them; `x` means the testbench pins no value there, not that the signal is undefined in hardware.
+
+```wavedrom
+{
+  "signal": [
+    {
+      "name": "clk",
+      "wave": "p.........................."
+    },
+    {
+      "name": "rst_n",
+      "wave": "0.1........................"
+    },
+    {},
+    {
+      "name": "wr_en",
+      "wave": "0..1...0....1.....0........"
+    },
+    {
+      "name": "wr_data",
+      "wave": "=..====.....=..............",
+      "data": [
+        "0x0",
+        "0x1",
+        "0x2",
+        "0x3",
+        "0x4",
+        "0xFFFF"
+      ]
+    },
+    {
+      "name": "rd_en",
+      "wave": "0......1....0......1.....0."
+    },
+    {},
+    {
+      "name": "full",
+      "wave": "xx0xxxx10...xxxx1x1xxxx0x0x"
+    },
+    {
+      "name": "rd_data",
+      "wave": "xx=xxxxx====xxxxxxxxxxx=x=x",
+      "data": [
+        "0x0",
+        "0x1",
+        "0x2",
+        "0x3",
+        "0x4",
+        "0xFFFF",
+        "0xFFFF"
+      ]
+    },
+    {
+      "name": "empty",
+      "wave": "xx1xxxx0...1xxxx0x0xxxx1x1x"
+    },
+    {
+      "name": "count",
+      "wave": "xx=xxxx=====xxxx=x=xxxx=x=x",
+      "data": [
+        "0x0",
+        "0x4",
+        "0x3",
+        "0x2",
+        "0x1",
+        "0x0",
+        "0x4",
+        "0x4",
+        "0x0",
+        "0x0"
+      ]
+    }
+  ],
+  "head": {
+    "text": "sync_fifo \u2014 directed sequence",
+    "tick": 0
+  },
+  "config": {
+    "hscale": 1
+  }
+}
+```
+
 ## Configuration
 
 - Width: 16 bits

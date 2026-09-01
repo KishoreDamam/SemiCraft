@@ -632,6 +632,59 @@ renaming inside expression text would mean parsing SystemVerilog.
 `check_spec_is_restylable` refuses to ship a catalog spec containing one, so
 the limitation is unreachable by accident rather than merely written down.
 
+## Timing diagrams that cannot drift (P4-10)
+
+Every IP datasheet now carries a `## Timing` section: a WaveDrom diagram of
+the directed sequence, inline as a ```wavedrom fenced block.
+
+**It is rendered, not drawn.** A timing diagram in a datasheet is the classic
+place for documentation to drift away from behaviour — it looks authoritative,
+it is authored by hand, and nothing checks it. This project has already fixed
+that class of bug twice: a datasheet claiming reserved bits "ignore writes"
+while the RTL answered SLVERR, and a generic renderer asserting timing the
+model did not own.
+
+So the generator draws nothing of its own. Every waveform comes from the same
+`TbSpec` that becomes the smoke testbench — the one Verilator executes against
+the real RTL, on every option case of every IP, in CI. The chain closes:
+
+```
+diagram  <-  TbSpec.vectors / TbSpec.checks  <-  verified by the run gate
+```
+
+If the RTL stops behaving this way the run gate goes red. If the `tb_spec`
+recipe changes the diagram changes with it. A diagram cannot be quietly wrong
+while the tests are green, which is the only property that makes one worth
+printing.
+
+**`x` is information, not a shortcut.** Inputs are fully determined — the
+testbench drives them, and a signal absent from a cycle's vector holds its
+previous value. Outputs are different: the testbench pins them only on the
+cycles it checks. Those cycles are drawn `x` because that is what the testbench
+actually knows. The side effect is that the diagram doubles as a picture of
+directed coverage: a long `x` run on an output is a stretch of behaviour nobody
+is checking, which is better seen in a datasheet than smoothed over with a
+plausible-looking line.
+
+**Inline JSON, because the file kind is frozen.** `GeneratedFile.kind` is a
+frozen `Literal["rtl", "tb", "doc"]` and a `.json` data file is none of the
+three — the same blocker recorded against the ROM's `$readmemh` route. Rather
+than widen a frozen contract for a diagram, the JSON goes inline in the
+markdown, which is how WaveDrom is embedded in markdown anyway.
+
+**What is *not* verified.** Nothing here renders the diagram to check it looks
+right — that needs a JavaScript runtime. What is checked structurally, on every
+IP: every wave is the same length (one character short silently misaligns every
+cycle after it), every row names a real port, `data` labels match their `=`
+slots positionally, only legal wave characters are emitted, and — the one that
+matters — every value drawn for an output equals the `Check.expected` at that
+cycle. That last test was confirmed to fail against a deliberate one-cycle
+misalignment before being kept.
+
+The window is the first 40 directed cycles, which covers reset release and the
+first few bus transactions. The serial IPs run for thousands of cycles at their
+default divisors; the datasheet says so when it truncates.
+
 ## Current state
 
 `by_kind("ip")` ships `axil-regblock`, `sync-fifo`, `sync-ram`, `axil-gpio`,

@@ -219,7 +219,8 @@ file as an extra Verilator source.
 | P4-07 I2C master | DONE | `ips/axil_i2c.py`: open-drain master (pull-down enables + sensed levels, no `inout`), START/STOP/byte primitives via CMD, ACK/NACK, **clock stretching** with the testbench stretching deliberately. Bus drivers are continuous functions of registered state, not FSM side effects. 7 golden cases x 2 languages |
 | P4-08 timer + intc | DONE | `ips/axil_timer.py`: prescaled **down**-counter (zero test instead of a full-width comparator), one-shot or periodic, maskable level `irq`. One-shot stops via an internal `running` flop because `CTRL.enable` is an `rw` field only software can write. `ips/axil_intc.py`: `num_irq` sources, **mask on the output not on the latch** (a request masked at arrival must still be findable when software enables it later), edge or level trigger as a generate-time option, edge history taken *after* the synchroniser. 7 + 9 golden cases x 2 languages |
 | P4-09 verification scaffold | DONE | The P3-06 monitor/checker generators, unattached since Phase 3, bound to all nine IPs. `checkers/bind.py` emits SystemVerilog **`bind`**, so no TB_SPEC / `TbModule` / `render_tb` change was needed and the generated testbench is byte-identical with or without a scaffold. `checkers/restyle.py` maps canonical names through the render name map (`areset` -> `areset_n` at the *default* configuration). New `tb`-kind file `<module>_checks.sv`, SV only. Checks liveness + read-data stability for the seven AXI IPs; read-hold for `sync-fifo`/`sync-ram` - deliberately not the reset values the SVA already covers. 58 new goldens |
-| Next | **P4-10 (per-IP documentation generator)** — md datasheet from metadata with wavedrom timing diagrams — then P4-11 (example instantiations + release v0.4.0). Also open, and now concrete: the **scoreboard family is still unused** — the FIFO is where it belongs (data out must equal data in, in order), and `sync-fifo`/`sync-ram` are the two IPs with no scaffold. The two blocked items (async FIFO, ROM) each need a recorded contract decision. Also: wire the cocotb path into `POST /api/v2/simulate` (SV-only today); the full suite is ~55 min and grows with each IP — if it becomes the bottleneck, move the per-IP run gates to the nightly matrix and keep `defaults` in the main loop, the same trade already made for the TB matrix; **v0.3.0 prepared but NOT tagged** | 2-agent budget per session |
+| P4-10 per-IP doc generator | DONE | `wavedrom.py`: a `## Timing` section on every IP datasheet, WaveDrom JSON inline in the markdown (`GeneratedFile.kind` is a frozen Literal and a `.json` is none of rtl/tb/doc - the same blocker as the ROM's `$readmemh`). **Rendered from the same `TbSpec` the smoke TB runs**, so the diagram is verified by the same run gate as the RTL and cannot drift. Unchecked cycles are drawn `x`, which makes it double as a directed-coverage picture. 129 doc goldens, all additions |
+| Next | **P4-11 (example instantiations per IP + golden + release v0.4.0)** — the last WP of Phase 4. Then Phase 5 (subsystem generator). Still open: the **scoreboard family is unused** — the FIFO is where it belongs; the two blocked items (async FIFO, ROM) each need a recorded contract decision; wire the cocotb path into `POST /api/v2/simulate` (SV-only today); the full suite is ~50 min and grows with each IP — if it becomes the bottleneck, move the per-IP run gates to the nightly matrix and keep `defaults` in the main loop, the same trade already made for the TB matrix; **v0.3.0 prepared but NOT tagged**, and PR #1 is merged so the nine Phase-4 commits need a **new** PR — which would also be the first CI run of any of these gates | 2-agent budget per session |
 
 ### P4-01: the contract is proven by a real IP, not by its own docstrings
 
@@ -738,3 +739,49 @@ nothing in the DUT's scope to compare against, and pushing a hardware-derived
 belongs where ordering *is* the property — a FIFO — which is now recorded as
 the next place to use it. One third of P3-06 therefore remains unattached, and
 saying so is more useful than shipping a scoreboard that cannot fail.
+
+### P4-10: the diagram is a rendering, not an illustration
+
+The datasheet already had ports and registers, so the only new content in this
+WP was timing diagrams — and a timing diagram is the single most drift-prone
+thing you can put in generated documentation. It looks authoritative, it is
+normally drawn by hand, and nothing checks it. This project has already fixed
+that exact class of bug twice (reserved bits "ignore writes" vs. SLVERR; a
+generic renderer asserting timing the model did not own), so the question was
+never "how do I draw a waveform" but "what do I draw it *from* so it cannot
+lie".
+
+The answer was already in the repo: `TbSpec`. It is cycle-accurate, it is what
+`generate_tb` turns into the smoke testbench, and that testbench runs under
+Verilator against the real RTL on every option case of every IP. Rendering the
+diagram from it closes the chain — diagram <- tb_spec <- run gate — so a
+diagram cannot be quietly wrong while the tests are green. Nothing new had to
+be verified; an existing verified thing had to be pointed at the page.
+
+**`x` where the testbench says nothing.** Outputs are pinned only on checked
+cycles. Drawing the rest `x` was not a rendering shortcut — it is what the
+testbench knows — and it turned out to be the most useful property of the
+diagrams: a long `x` run is a stretch of behaviour nobody checks, now visible
+in the datasheet instead of smoothed over with a plausible line.
+
+**The one test that matters, confirmed able to fail.** Structural checks
+(matching wave lengths, real port names, `data` labels aligned to `=` slots,
+legal wave characters) catch garbage but would all pass for a diagram that
+ignored the spec entirely. The test that carries the claim walks every drawn
+output value back to the `Check.expected` at that cycle. It was validated by
+deliberately introducing a one-cycle prologue misalignment first: nine IPs
+failed, and only then was it kept. Same for the "changing a check changes the
+diagram" test, which exists because every structural test above would pass for
+a hardcoded constant.
+
+**A frozen contract left alone.** The obvious shape for this is a `.json` file
+next to the RTL. `GeneratedFile.kind` is a frozen `Literal["rtl", "tb", "doc"]`
+and a data file is none of the three — the same blocker already recorded
+against the ROM's `$readmemh` route. Inlining the JSON in the markdown is how
+WaveDrom is embedded in markdown anyway, so the contract stayed shut for a
+diagram, which is not a good enough reason to open it.
+
+**Scope kept to IPs**, per the WP title. Widening it to the seven modules would
+have rewritten roughly fifteen hundred goldens for a decision nobody has made;
+a test pins that a module datasheet has no timing section, so the boundary is
+deliberate rather than accidental.

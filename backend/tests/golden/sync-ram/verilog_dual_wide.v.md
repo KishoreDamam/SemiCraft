@@ -62,6 +62,82 @@ Timing: clocked by `clk`.
 | `re` | `re` | input |
 | `rdata` | `dout` | output |
 
+## Timing
+
+Rendered from the same directed testbench recipe the smoke simulation runs in CI, so this diagram cannot drift from the behaviour the tests verify.
+
+Inputs are shown as the testbench drives them. Outputs are shown only on the cycles it checks them; `x` means the testbench pins no value there, not that the signal is undefined in hardware.
+
+```wavedrom
+{
+  "signal": [
+    {
+      "name": "clk",
+      "wave": "p..........."
+    },
+    {},
+    {
+      "name": "waddr",
+      "wave": "===....=....",
+      "data": [
+        "0x0",
+        "0x1",
+        "0xFFF",
+        "0x0"
+      ]
+    },
+    {
+      "name": "we",
+      "wave": "1..0...10..."
+    },
+    {
+      "name": "din",
+      "wave": "===....=....",
+      "data": [
+        "0x11",
+        "0x22",
+        "0x33",
+        "0xFFFFFFEE"
+      ]
+    },
+    {
+      "name": "raddr",
+      "wave": "=...==.=.=..",
+      "data": [
+        "0x0",
+        "0x1",
+        "0xFFF",
+        "0x0",
+        "0xFFF"
+      ]
+    },
+    {
+      "name": "re",
+      "wave": "0..1.....0.."
+    },
+    {},
+    {
+      "name": "dout",
+      "wave": "xxxx===x==.x",
+      "data": [
+        "0x11",
+        "0x22",
+        "0x33",
+        "0x11",
+        "0xFFFFFFEE"
+      ]
+    }
+  ],
+  "head": {
+    "text": "sync_ram \u2014 directed sequence",
+    "tick": 0
+  },
+  "config": {
+    "hscale": 1
+  }
+}
+```
+
 ## Configuration
 
 - Width: 32 bits

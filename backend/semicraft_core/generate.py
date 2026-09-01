@@ -281,6 +281,7 @@ def _module_doc(
     explanation,
     config_hash_value: str,
     interface_sections: list[str] | None = None,
+    timing_sections: list[str] | None = None,
 ) -> str:
     """Markdown datasheet for a module (Appendix A.3): title, purpose, port
     table (grouped from ``port_groups``), configuration, assumptions/limitations.
@@ -289,6 +290,12 @@ def _module_doc(
     table and the configuration list. Empty for a module; an IP (Appendix B)
     passes its register map and bus-interface sections there, so the whole
     interface surface — ports, registers, bundles — stays together.
+
+    ``timing_sections`` (P4-10) follow them: the WaveDrom diagram of the
+    directed sequence. Placed after the static interface and before the
+    configuration list, because it describes how the interface *moves* — a
+    reader wants the port and register tables in hand before reading a
+    waveform of them.
     """
     port_groups = item.port_groups(opts)
     lines: list[str] = [
@@ -302,6 +309,7 @@ def _module_doc(
         "",
         *_md_port_table(port_groups, explanation),
         *(interface_sections or []),
+        *(timing_sections or []),
         "## Configuration",
         "",
     ]
@@ -351,6 +359,34 @@ def _ip_interface_sections(item, opts, rtl_module) -> list[str]:
     return sections
 
 
+def _ip_timing_section(item, opts, rtl_module) -> list[str]:
+    """WaveDrom timing section for an IP's datasheet (P4-10).
+
+    Derived from ``tb_spec`` — the recipe the smoke testbench executes — rather
+    than authored, so the diagram is verified by the same run gate that
+    verifies the RTL. An item with no ``tb_spec`` (or a combinational one) gets
+    no section rather than an invented one.
+    """
+    if not hasattr(item, "tb_spec"):
+        return []
+    from .render.style import build_name_map
+    from .tb.generate_tb import _param_values, _width_of
+    from .wavedrom import timing_diagram, timing_section_md
+
+    spec = item.tb_spec(opts)
+    params = _param_values(rtl_module)
+    widths = {p.name: _width_of(p.dtype, params) for p in rtl_module.ports}
+    names = build_name_map(rtl_module, _style_from_options(opts))
+    diagram = timing_diagram(
+        spec,
+        rtl_module,
+        widths,
+        lambda canonical: names.get(canonical, canonical),
+        title=f"{rtl_module.name} — directed sequence",
+    )
+    return timing_section_md(diagram)
+
+
 def generate_files(item_id: str, options: dict) -> GenerateFilesResult:
     """Generate the full file set for a catalog item (API v2, Appendix A.1/A.3).
 
@@ -382,7 +418,13 @@ def generate_files(item_id: str, options: dict) -> GenerateFilesResult:
         # An IP (Appendix B) is a module plus register-map/bundle metadata, so
         # it takes the identical path and only adds two datasheet sections.
         interface_sections = _ip_interface_sections(item, opts, rtl_module) if kind == "ip" else []
-        doc_text = _module_doc(item, opts, explanation, chash, interface_sections)
+        # Timing diagram (P4-10), IPs only. Rendered from the same tb_spec the
+        # smoke testbench runs, so it cannot drift from verified behaviour -
+        # see semicraft_core/wavedrom.py.
+        timing = _ip_timing_section(item, opts, rtl_module) if kind == "ip" else []
+        doc_text = _module_doc(
+            item, opts, explanation, chash, interface_sections, timing
+        )
         files.append(GeneratedFile(path=f"{doc_stem}.md", kind="doc", text=doc_text))
 
         # Smoke TB (P2-13): SV testbench built from ModuleDef.tb_spec against
