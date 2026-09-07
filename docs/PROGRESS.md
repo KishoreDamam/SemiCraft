@@ -222,7 +222,8 @@ file as an extra Verilator source.
 | P4-10 per-IP doc generator | DONE | `wavedrom.py`: a `## Timing` section on every IP datasheet, WaveDrom JSON inline in the markdown (`GeneratedFile.kind` is a frozen Literal and a `.json` is none of rtl/tb/doc - the same blocker as the ROM's `$readmemh`). **Rendered from the same `TbSpec` the smoke TB runs**, so the diagram is verified by the same run gate as the RTL and cannot drift. Unchecked cycles are drawn `x`, which makes it double as a directed-coverage picture. 129 doc goldens, all additions |
 | P4-11 examples + v0.4.0 | DONE (prep) — NOT TAGGED | `example.py`: `<module>_example.sv|.v` per IP, a second `rtl`-kind file, **lint-gated `-Wall` against the IP it instantiates** rather than printed into markdown. Connections grouped from `port_groups()`, annotated from `bundles()`. VERSION + pyproject 0.3.0 -> 0.4.0; RELEASE_CHECKLIST gains a v0.4.0 section incl. Deliberate gaps. All goldens regenerated: **banner-only diff, 588 config hashes byte-identical** |
 | doc naming fix | DONE | The datasheet's port table **never applied the render name map** — under any naming convention/prefix/suffix every module and every IP listed ports absent from the RTL. Shipped since v0.2.0. Third bug of this shape (P3-05a assertions, P4-07 TB clock). Root cause: **no golden case set a naming style**, so the axis was invisible. Fixed + a `styled_names` case added to all 26 catalog items |
-| Next | **Phase 4 is complete (13/13 WPs, 9 IPs).** Before Phase 5: open a PR so CI actually runs the P4 gates — `ci.yml` triggers on `main` and PRs only, so every gate added since P4-01 is locally-verified only — then tag **v0.3.0 and v0.4.0** on main. Then Phase 5 (subsystem generator), whose first need is a real **module-instance node in the IR** (an IR_SPEC decision); `example.py` emits instantiation as text and should be rewritten on top of that node, not duplicated. Still open: the **scoreboard family is unused** (the FIFO is where it belongs); async FIFO and ROM each need a recorded contract decision; wire cocotb into `POST /api/v2/simulate`; the full suite is ~80 min — moving the per-IP run gates to the nightly matrix is the obvious relief | 2-agent budget per session |
+| CI coverage fix | DONE | `backend/tests/sim/test_runner_integration.py` had **never run in CI**: it skips without Verilator, so the plain `pytest` job reported a skip, and the Verilator job's hand-maintained path list omitted it — the integration test for `run_smoke`, which every per-IP run gate depends on. Added its step, and a guard (`tests/release/test_ci_covers_verilator_tests.py`) asserting every Verilator-gated test file is named by a workflow, so the next one cannot go missing. Also replaced `pytest backend/tests/golden -k lint` with an explicit path: its `if` guard was vestigial ("WP-08 pending") and its filter double-ran `test_example_lint.py` |
+| Next | **Phase 4 complete and merged to `main` (PR #2, 21 commits, CI green on the first run).** **v0.3.0 and v0.4.0 are still UNTAGGED** — this session's GitHub credentials return HTTP 403 on `git-receive-pack` for tag refs while branch pushes to `claude/*` succeed, so tagging is the user's to do (proxy ruled out: zero relay failures; no ref-creation tool on the GitHub MCP server). Recommended points: **v0.4.0 → `3c72ac7`** (P4-11, VERSION=0.4.0, matching v0.2.0's convention of tagging the prep commit); **v0.3.0 → `89fb25c`** — *not* the obvious `5f04d61`, whose checklist predates P3-08 cocotb, and never `7c58c40` (VERSION=0.1.0, which would repeat the v0.2.0 bug). Then Phase 5 (subsystem generator), whose first need is a real **module-instance node in the IR** (an IR_SPEC decision); `example.py` emits instantiation as text and should be rewritten on top of that node, not duplicated. Still open: the **scoreboard family is unused** (the FIFO is where it belongs); async FIFO and ROM each need a recorded contract decision; wire cocotb into `POST /api/v2/simulate`; the full suite is ~55 min and the Verilator CI job ~50, of which the pre-existing TB compile gate is 29 — that, not the P4 gates, is where to cut | 2-agent budget per session |
 
 ### P4-01: the contract is proven by a real IP, not by its own docstrings
 
@@ -837,3 +838,36 @@ deliberate blocks (async FIFO, ROM) carry recorded unblock paths, and the
 scoreboard family is still unattached with a recorded reason. Nothing in Phase 4
 has ever been executed by CI — the branch it was built on is not one `ci.yml`
 triggers on — so a pull request should precede both tags.
+
+### After Phase 4: a test that had never run, and the guard that replaces it
+
+`backend/tests/sim/test_runner_integration.py` needs Verilator, so it skipped
+in the plain `pytest` job; the Verilator job runs an explicit, hand-maintained
+list of paths, and that list never included it. **A test that skips everywhere
+is indistinguishable from a test that passes everywhere** — and this was the
+integration test for `run_smoke`, the function every per-IP run gate calls. It
+does pass, which is luck rather than evidence: nothing had checked in months.
+
+Adding the missing line fixes one instance. The gap is that the path list is
+maintained by hand, so the next Verilator-gated file is one forgotten line from
+the same fate. `tests/release/test_ci_covers_verilator_tests.py` asserts every
+such file is named by a workflow, and was written to fail first: it caught the
+real gap, plus two things worth having found.
+
+**It flagged `test_lint_gate.py`,** covered only by `pytest backend/tests/golden
+-k lint`. A filtered directory run cannot be checked for coverage — what `-k`
+selects is not knowable from the path — so the guard refuses to count it. Rather
+than relax the rule, the step now names the file. That also removed a vestigial
+`if` existence guard ("WP-08 pending", from before goldens existed) and stopped
+`test_example_lint.py` being run twice, since `-k lint` had been sweeping it in
+alongside its own P4-11 step.
+
+**And it flagged itself.** The guard states the gate pattern literally in order
+to search for it, so it matched its own detector while needing no Verilator.
+Excluded by path, because a self-avoiding regex would be unreadable — the kind
+of cleverness that makes the next reader distrust the check.
+
+Note for whoever tags: pushing a tag ref returns **HTTP 403** under this
+session's credentials, while branch pushes succeed. The agent proxy reports zero
+relay failures and the GitHub MCP server exposes no ref-creation tool, so this
+is a credential scope, not a transport fault — tagging is a human action here.

@@ -91,12 +91,14 @@ jobs:
       - name: Run lint module tests (incl. verilator integration test)
         run: uv run pytest backend/tests/lint -m ""
       - name: Run golden lint gate
-        run: |
-          if [ -d backend/tests/golden ] && find backend/tests/golden -name 'test_*.py' | grep -q .; then
-            uv run pytest backend/tests/golden -k lint
-          else
-            echo "No golden lint tests yet (WP-08 pending) — skipping."
-          fi
+        # Named explicitly rather than `backend/tests/golden -k lint`. That
+        # older form carried a vestigial "WP-08 pending" existence guard, and
+        # its -k filter also swept in test_example_lint.py, which has had its
+        # own step since P4-11 and was being run twice. A filtered directory
+        # also cannot be checked for coverage, since what it selects is not
+        # knowable from the path - see
+        # backend/tests/release/test_ci_covers_verilator_tests.py.
+        run: uv run pytest backend/tests/golden/test_lint_gate.py -v
       - name: Run golden TB compile gate (P2-14)
         run: uv run pytest backend/tests/golden/test_tb_compile.py -v
       - name: Run cocotb backend run gate (P3-08, beta)
@@ -198,6 +200,14 @@ jobs:
         # copy-pasteable snippet is worse than no snippet, because a reader
         # trusts it.
         run: uv run pytest backend/tests/golden/test_example_lint.py -v
+
+      - name: Run sim runner integration gate (P3-03)
+        # This had never run in CI. It needs Verilator, so it skipped in the
+        # plain `pytest` job, and the hand-maintained path list in this job
+        # omitted it - a test that skips everywhere is indistinguishable from
+        # one that passes everywhere. It is the integration test for
+        # `run_smoke`, which every per-IP run gate above depends on.
+        run: uv run pytest backend/tests/sim/test_runner_integration.py -v
 
       - name: Run golden TB run gate (P3-03a, enforcing)
         # Executes each module's defaults smoke TB (SEMICRAFT_TB_RUN_ALL=1
