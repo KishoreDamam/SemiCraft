@@ -903,20 +903,42 @@ Four things a stranger hits first do:
   `tests/release/test_license.py` guards it (nine assertions, proven able to
   fail against three mutations: LICENSE deleted, the boundary sentence edited
   away, the README reverted to its "if/when added" promise).
-- **The README describes the Phase-1 snippet MVP** — ten snippet categories as
-  the supported set, "full simulation" listed as out of scope, and modules,
-  IPs and the whole verification stack present only as roadmap bullets.
-- **Mock mode is the frontend default and its catalog is stale**: unset
-  `NEXT_PUBLIC_API_BASE` serves 11 invented items against the real 26, with an
-  empty "IP Blocks" group and no warning of any kind. `frontend/README.md`
-  points at an `.env.example` that does not exist.
-- **CORS is hardcoded to `http://localhost:3000`** and the backend reads *no*
-  environment variables at all (one grep hit repo-wide, and it is a comment
-  about deliberately not probing the environment). The product does not run
-  outside one hardcoded origin.
+- ~~**The README describes the Phase-1 snippet MVP.**~~ **RESOLVED (R-02).**
+  Rewritten around the product that exists: the seven files an IP produces and
+  **what each is for** — the first question every user has, answered nowhere
+  until now — all 26 items in three tables, the evidence behind the output, and
+  a plain list of non-goals. The UI header said "RTL Snippet Generator" too; it
+  no longer does. `tests/release/test_readme_catalog.py` ties the tables to the
+  registry (proven able to fail three ways). Descriptions stay free to change;
+  which blocks exist and how many does not.
+- ~~**Mock mode is the frontend default and its catalog is stale.**~~
+  **RESOLVED** — but not as this review first prescribed. Regenerating the mock
+  catalog from the live backend would mean **fabricating RTL, datasheets and
+  testbenches for 26 items**, and a large body of invented output is a worse
+  artifact than a small honest sample. The defect was never that the sample is
+  small; it is that the sample was silent. So: a permanent, non-dismissible
+  `MockBanner` saying the data is fabricated and how to connect a real backend
+  (`isMockMode()` already existed, was correct, and was used nowhere in the UI),
+  plus the `.env.example` — whose absence had a cause worth recording:
+  **`frontend/.gitignore` carried a blanket `.env*`**, so the file the README
+  had pointed at since v0.2.0 could never have been committed.
+- ~~**CORS is hardcoded and the backend reads no environment variables.**~~
+  **RESOLVED.** `api/config.py` is the server's only environment surface and
+  encodes the rule that keeps it safe: *the server may be configured; the
+  generator may not* — nothing in it reaches `semicraft_core`, because a
+  generator whose output depends on the environment cannot be byte-reproducible.
+  `SEMICRAFT_CORS_ORIGINS` defaults to the previously hardcoded value, and an
+  empty or malformed value falls back to it rather than to "no origins" (a typo
+  that rejects every browser fails as an unexplained network error). Also
+  **`allow_credentials` is now `False`**: the app declared `True` while nothing
+  in the frontend sends cookies, sessions or auth headers — verified, not
+  assumed. It bought nothing and made `Allow-Origin: *` illegal for
+  self-hosters, and "credentials plus a permissive origin list" is the classic
+  CORS misconfiguration.
 
-Each is small. Each is invisible from inside the project and immediate from
+Each was small. Each was invisible from inside the project and immediate from
 outside it — the same shape as every defect the last four phases turned up.
+**All four are fixed as of 2026-09-08**; the review doc carries the detail.
 
 Also raised, not blocking: `beta` is badged on seven of nine IPs and defined
 nowhere; the AXI port table documents seventeen ports as "see the register

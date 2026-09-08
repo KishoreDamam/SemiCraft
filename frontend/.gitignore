@@ -32,6 +32,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...except the template. frontend/README.md told readers to "see .env.example"
+# from v0.2.0 on, while this blanket .env* rule guaranteed the file could never
+# be committed -- so the reference was broken for the file's entire lifetime.
+!.env.example
 
 # vercel
 .vercel

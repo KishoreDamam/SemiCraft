@@ -9,9 +9,9 @@ Launch shape, as decided: **repository release now, hosted deployment later.**
 Everything below is scoped to that. Blockers that belong only to hosting are
 recorded in §5 as deferrals, not fixed.
 
-This document is the review and the plan. Of it, **only B1/R-01 (the
-license) has been executed**, on 2026-09-08; everything else is proposed, not
-started.
+This document is the review and the plan. **All four blockers in §4 are now
+fixed** (2026-09-08). The §5 list and the §7 work packages are still proposed,
+not started, apart from R-01 and R-02.
 
 ---
 
@@ -117,7 +117,7 @@ fails, no user complains, and the project has quietly changed what it promises
 about every file it has ever generated. The test asserts the claim survives
 while leaving the wording free to change.
 
-### B2 — The README describes a product four phases out of date
+### B2 — The README describes a product four phases out of date — **RESOLVED 2026-09-08 (R-02)**
 
 The front door still opens "## MVP: RTL Snippet Generator", presents the ten
 snippet categories as **the** supported set, describes the feature list as
@@ -132,7 +132,20 @@ stack — three phases of work — appear in the README only as future roadmap
 bullets. A reader who trusts it will conclude SemiCraft is a boilerplate
 snippet toy and leave.
 
-### B3 — Mock mode is the default, and the mock catalog is stale
+*Fixed.* The README is rewritten around what the product is: the seven files an
+IP produces and **what each one is for** (the first question every user has,
+and previously answered nowhere), all 26 items in three tables, the evidence
+behind the output — mutation-tested run gates, zero-warning lint, byte-identical
+determinism — and a plainly stated list of what SemiCraft does *not* do. The
+UI's own header said "RTL Snippet Generator" too; it no longer does.
+
+`backend/tests/release/test_readme_catalog.py` ties the tables to the registry:
+adding an item without listing it, delisting one that still exists, filing one
+under the wrong kind, or misstating the total all fail. Proven against three
+mutations. Descriptions stay free to change — what is pinned is which blocks
+exist and how many.
+
+### B3 — Mock mode is the default, and the mock catalog is stale — **RESOLVED 2026-09-08**
 
 `frontend/lib/api.ts`:
 
@@ -150,11 +163,27 @@ convincing fake of a four-phase-old product: no error, no banner, no
 indication whatsoever that the data is invented. And `frontend/README.md`
 directs the reader to "see `.env.example`" — **that file does not exist.**
 
-Three fixes, all small: ship the `.env.example`, make mock mode announce
-itself unmistakably in the UI, and regenerate the mock catalog from the live
-backend so that even the fallback is honest.
+*Fixed, though not the way this review first proposed.* The original
+prescription included regenerating the mock catalog from the live backend. On
+inspection that is the wrong fix: mocking 26 items means **fabricating RTL,
+datasheets and testbenches for all of them**, and a large body of invented
+output is a worse artifact than a small honest sample. The defect was never
+that the sample is small. It is that the sample was silent.
 
-### B4 — CORS is hardcoded, and the backend has no configuration at all
+- `frontend/components/MockBanner.tsx` — a permanent, **non-dismissible**
+  banner stating that the data is a demo sample with fabricated output, and how
+  to connect a real backend. Dismissible would mean dismissed once and never
+  seen again, which is the silent state this ends. `isMockMode()` already
+  existed, was correct, and was referenced nowhere in the UI.
+- `frontend/.env.example` — and the reason it never existed: **`frontend/.gitignore`
+  carried a blanket `.env*`**, so the file the README had pointed at since
+  v0.2.0 could never have been committed. The rule now has a `!.env.example`
+  negation, with the history noted next to it.
+- Five tests, including one asserting the banner says the data is *fabricated*
+  rather than merely that a backend is absent — "no backend" reads as a
+  connectivity hiccup, which is exactly the wrong conclusion.
+
+### B4 — CORS is hardcoded, and the backend has no configuration at all — **RESOLVED 2026-09-08**
 
 ```python
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000"], ...)
@@ -169,8 +198,27 @@ So a self-hoster running the frontend anywhere other than
 diagnostic. The product does not run outside one hardcoded origin. This is a
 blocker for the self-hosted release and becomes a hosting blocker later.
 
-Needs a small, explicit configuration surface — allowed origins at minimum —
-documented in one place.
+*Fixed.* `backend/api/config.py` is the server's only environment surface, and
+encodes the rule that makes it safe: **the server may be configured; the
+generator may not.** Nothing in it reaches `semicraft_core` — a generator whose
+output depended on the environment could not be byte-reproducible, which is a
+ground rule.
+
+`SEMICRAFT_CORS_ORIGINS` (comma-separated) sets the allowed origins, defaulting
+to the exact value that was hardcoded, so an existing local setup upgrades with
+no action. An empty or malformed value falls back to that default rather than to
+"no origins", because a typo that rejects every browser fails as an unexplained
+network error.
+
+One thing changed beyond configurability: **`allow_credentials` is now `False`.**
+The app declared `True` through v0.4.0 while nothing in the frontend sends
+cookies, sessions or auth headers — verified, not assumed. It bought nothing and
+cost something real, since the CORS spec forbids `Allow-Origin: *` alongside
+credentials, making the wildcard unusable for self-hosters. "Credentials plus a
+permissive origin list" is also the classic CORS misconfiguration. Eight tests,
+including one that pins the *wiring* rather than the helper — a config nobody
+reads is worse than no config — and it fails when the hardcoded value is
+restored.
 
 ## 5. Should fix before tagging
 
@@ -281,7 +329,7 @@ when the document drifts from the code.
 | WP | Deliverable | Size | Anti-rot gate |
 |---|---|---|---|
 | ~~**R-01**~~ | ~~`LICENSE` + rewritten legal section~~ **DONE 2026-09-08** — MIT; boundary stated and tested | S | `tests/release/test_license.py`, proven able to fail |
-| **R-02** | `README.md` rewrite — the real product, its evidence, and an honest scope | M | test: catalog counts quoted in the README equal `registry.by_kind()` |
+| ~~**R-02**~~ | ~~`README.md` rewrite~~ **DONE 2026-09-08** — the product, the seven files, 26 items, the evidence, the non-goals | M | `tests/release/test_readme_catalog.py`, proven able to fail |
 | **R-03** | `docs/GETTING_STARTED.md` — install, run, first generation, in that order | S | the commands are executed by CI, not just printed |
 | **R-04** | `docs/USER_GUIDE.md` — the option model, the seven files and what each is *for*, lint badge, Run, permalinks, naming styles | L | test: every option named in the guide exists in the JSON schema |
 | **R-05** | `examples/` — a curated tree of real generated output, one per family | M | test: every file is byte-identical to freshly generated output |
@@ -311,10 +359,9 @@ explains that today, and it is the first question every user will have.
 
 ### Suggested order
 
-1. ~~**B1**~~ (done), then **B2, B3, B4** — the remaining blockers. Nothing
-   else matters until a stranger can accurately see what this is.
-2. ~~**R-01**~~ (done), then **R-02, R-03, R-05** — front door, first run,
-   something real to look at. This is the minimum coherent launch.
+1. ~~**B1, B2, B3, B4**~~ — **all done 2026-09-08.**
+2. ~~**R-01, R-02**~~ (done), then **R-03, R-05** — first run, and something
+   real to look at. This is the minimum coherent launch.
 3. **R-06, R-04, R-09** — catalog and depth for the users the front door
    brings in.
 4. **R-10, R-11, R-12, S1** — changelog, community files, PRD reconciliation,

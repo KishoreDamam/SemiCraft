@@ -45,14 +45,19 @@ from semicraft_core.ips.contract import IpContractError
 from semicraft_core.ir.validate import IRValidationError
 from semicraft_core.snippets import registry
 
+from .config import ALLOW_CREDENTIALS, cors_origins
+
 logger = logging.getLogger("semicraft.api")
 
 app = FastAPI(title="SemiCraft API")
 
+# Origins are configurable (SEMICRAFT_CORS_ORIGINS); the default is unchanged
+# from the hardcoded value this app shipped through v0.4.0, so an existing local
+# setup upgrades with no action. See api/config.py for why credentials are off.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
+    allow_origins=cors_origins(),
+    allow_credentials=ALLOW_CREDENTIALS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
