@@ -116,16 +116,37 @@ see `frontend/mocks/`.
 
 ## License and Disclaimer
 
-Generated RTL is free to use, including commercially, and is provided
-**as-is with no warranty of any kind** — use it at your own risk. Every
-generated file header stamps this disclaimer alongside the tool version and
-a config hash (see `backend/semicraft_core/license.py`, `DISCLAIMER`):
+Two separate things are licensed here, and they are licensed differently.
+Read both lines before using either.
+
+### The generated output — yours, unencumbered
+
+**SemiCraft claims no rights over the RTL, testbenches, or documentation it
+generates for you.** Use it however you like, including commercially, in
+proprietary and closed-source designs, with no attribution, no notice file,
+and no obligation of any kind back to this project. Generated output is *not*
+a derivative work of SemiCraft for licensing purposes, and the MIT terms below
+do not attach to it.
+
+It is provided **as-is with no warranty** — use it at your own risk. Every
+generated file header stamps that disclaimer alongside the tool version and a
+config hash (single-sourced from `backend/semicraft_core/license.py`,
+`DISCLAIMER`):
 
 > Generated code is provided as-is, without warranty of any kind. Free for
 > commercial and non-commercial use at the user's own risk.
 
-This disclaimer covers generated *output* only; SemiCraft itself (this
-repository) is licensed separately (see repository license, if/when added).
+SemiCraft is a generator, not a signoff tool. It makes no production, timing
+closure, or silicon correctness claim. **Review, simulate, and lint generated
+RTL against your own flow before committing it to a design.** The lint gate,
+the run gates, and the generated verification artifacts are evidence, not a
+substitute for your own verification.
+
+### SemiCraft itself — MIT
+
+This repository is licensed under the **MIT License** — see
+[`LICENSE`](LICENSE). Copy it, fork it, embed it in a commercial product; keep
+the copyright notice.
 
 ## Roadmap
 

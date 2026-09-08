@@ -892,8 +892,17 @@ live at `/docs`.
 generator, the verification stack or the test discipline blocks the release.
 Four things a stranger hits first do:
 
-- **No `LICENSE` file.** The README has been promising one ("if/when added")
-  since v0.1.0. A public repo without one grants no rights to anybody.
+- ~~**No `LICENSE` file.**~~ **RESOLVED 2026-09-08 — MIT** (owner's call over
+  the Apache-2.0 recommendation). `LICENSE` + `pyproject` metadata, verified by
+  building the wheel: `License-Expression: MIT`, LICENSE bundled in the
+  dist-info. The README's licensing section is rewritten to separate the two
+  differently-licensed things and to state what had never been written down —
+  **the MIT terms do not attach to generated output**: no attribution, no
+  notice file, nothing riding into a proprietary design. That promise lives in
+  prose only, and R-02 is a wholesale README rewrite, so
+  `tests/release/test_license.py` guards it (nine assertions, proven able to
+  fail against three mutations: LICENSE deleted, the boundary sentence edited
+  away, the README reverted to its "if/when added" promise).
 - **The README describes the Phase-1 snippet MVP** — ten snippet categories as
   the supported set, "full simulation" listed as out of scope, and modules,
   IPs and the whole verification stack present only as roadmap bullets.

@@ -9,8 +9,9 @@ Launch shape, as decided: **repository release now, hosted deployment later.**
 Everything below is scoped to that. Blockers that belong only to hosting are
 recorded in §5 as deferrals, not fixed.
 
-This document is the review and the plan. **Nothing in §4–§6 has been
-executed** — the work packages in §7 are proposed, not started.
+This document is the review and the plan. Of it, **only B1/R-01 (the
+license) has been executed**, on 2026-09-08; everything else is proposed, not
+started.
 
 ---
 
@@ -77,22 +78,44 @@ Recorded so the fix list below is not mistaken for the whole picture.
 
 Ordered by how badly each one hurts a first-time visitor.
 
-### B1 — There is no LICENSE file
+### B1 — There is no LICENSE file — **RESOLVED 2026-09-08 (R-01 shipped)**
 
-`README.md` says SemiCraft "is licensed separately (see repository license,
-**if/when added**)". It was never added. A public repository with no license
-grants no rights: nobody may legally use, fork, redistribute, or contribute,
-and no company will let an engineer near it.
+*The defect.* `README.md` said SemiCraft "is licensed separately (see
+repository license, **if/when added**)". It was never added, through four
+releases. A public repository with no license grants no rights: nobody may
+legally use, fork, redistribute, or contribute.
 
-The distinction the project already draws correctly must survive the fix:
-generated **output** carries its own terms, stamped into every file header
-from `semicraft_core/license.py` ("free for commercial and non-commercial use
-at the user's own risk"). The **repository** is a separate question and
-currently has no answer.
+*Decision: **MIT**.* Recommended here was Apache-2.0, for its explicit patent
+grant; the owner chose MIT and MIT is what shipped. The reasoning is sound for
+this product: SemiCraft's proposition is that generated output is the user's,
+unencumbered, and MIT is the license that most obviously does not get in the
+way of that. The patent grant Apache-2.0 adds protects contributors to *the
+tool*, which matters less while the contributor set is one person; it can be
+revisited if that changes, though relicensing gets harder with every outside
+contributor.
 
-Needs a decision, then a file. Apache-2.0 is the recommendation over MIT: it
-carries an explicit patent grant, which matters more than usual for a tool
-whose output goes into silicon, and corporate legal review waves it through.
+*What shipped.*
+
+- `LICENSE` — MIT, © 2026 Kishore Damam.
+- `pyproject.toml` gains `license = "MIT"` and `license-files = ["LICENSE"]`.
+  Verified by building the wheel, not by reading the field: the built metadata
+  carries `License-Expression: MIT` and bundles
+  `semicraft-0.4.0.dist-info/licenses/LICENSE`.
+- The README's licensing section is rewritten to separate the two things that
+  are licensed differently, and to say the part that was never written down:
+  **the MIT terms do not attach to generated output.** No attribution, no
+  notice file, no obligation riding into a proprietary design. That is the
+  whole proposition of the product and it had never been stated.
+- `backend/tests/release/test_license.py` — nine assertions, proven able to
+  fail against three mutations (LICENSE deleted; the output-boundary sentence
+  edited away; the README reverted to its "if/when added" promise).
+
+*Why the boundary needs a test.* The promise that generated RTL is unencumbered
+lives in one README paragraph and nowhere in the code. **R-02 is a wholesale
+README rewrite** — the single most likely event to drop it, silently: no test
+fails, no user complains, and the project has quietly changed what it promises
+about every file it has ever generated. The test asserts the claim survives
+while leaving the wording free to change.
 
 ### B2 — The README describes a product four phases out of date
 
@@ -257,7 +280,7 @@ when the document drifts from the code.
 
 | WP | Deliverable | Size | Anti-rot gate |
 |---|---|---|---|
-| **R-01** | `LICENSE` + rewritten legal section; output-vs-repository boundary stated once, precisely | S | test: `LICENSE` exists and the README's SPDX id matches it |
+| ~~**R-01**~~ | ~~`LICENSE` + rewritten legal section~~ **DONE 2026-09-08** — MIT; boundary stated and tested | S | `tests/release/test_license.py`, proven able to fail |
 | **R-02** | `README.md` rewrite — the real product, its evidence, and an honest scope | M | test: catalog counts quoted in the README equal `registry.by_kind()` |
 | **R-03** | `docs/GETTING_STARTED.md` — install, run, first generation, in that order | S | the commands are executed by CI, not just printed |
 | **R-04** | `docs/USER_GUIDE.md` — the option model, the seven files and what each is *for*, lint badge, Run, permalinks, naming styles | L | test: every option named in the guide exists in the JSON schema |
@@ -288,10 +311,10 @@ explains that today, and it is the first question every user will have.
 
 ### Suggested order
 
-1. **B1, B2, B3, B4** — the blockers. Nothing else matters until a stranger
-   can legally and accurately see what this is.
-2. **R-01, R-02, R-03, R-05** — license, front door, first run, something real
-   to look at. This is the minimum coherent launch.
+1. ~~**B1**~~ (done), then **B2, B3, B4** — the remaining blockers. Nothing
+   else matters until a stranger can accurately see what this is.
+2. ~~**R-01**~~ (done), then **R-02, R-03, R-05** — front door, first run,
+   something real to look at. This is the minimum coherent launch.
 3. **R-06, R-04, R-09** — catalog and depth for the users the front door
    brings in.
 4. **R-10, R-11, R-12, S1** — changelog, community files, PRD reconciliation,
