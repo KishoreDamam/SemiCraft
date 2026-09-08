@@ -1,6 +1,6 @@
 # SemiCraft Progress Tracker
 
-Updated: 2026-08-20. Keep current — this file is the session-handoff state.
+Updated: 2026-09-08. Keep current — this file is the session-handoff state.
 
 ## WP status
 
@@ -871,3 +871,55 @@ Note for whoever tags: pushing a tag ref returns **HTTP 403** under this
 session's credentials, while branch pushes succeed. The agent proxy reports zero
 relay failures and the GitHub MCP server exposes no ref-creation tool, so this
 is a credential scope, not a transport fault — tagging is a human action here.
+
+## Launch (v1) — readiness review, 2026-09-08
+
+**Phase 5 is not being started.** The product ships as it stands at the end of
+Phase 4. Launch shape decided: **repository release now, hosted deployment
+later** — so hosting-only concerns are recorded as deferrals rather than fixed.
+
+Full review, with evidence and the twelve release-documentation work packages:
+**[docs/LAUNCH_READINESS.md](LAUNCH_READINESS.md)**. Nothing in it has been
+executed — it is a plan awaiting approval.
+
+Re-verified at `6ab155e` rather than trusted from this file: `ruff` clean;
+frontend build + 172 tests + eslint all green; `registry.by_kind` gives
+10 snippets / 7 modules / 9 IPs = 26; `generate_files("axil-uart", {})` gives
+7 files and 1595 lines; Verilator 5.020; 7 API routes with Swagger UI already
+live at `/docs`.
+
+**Verdict: the engineering is ready, the packaging is not.** Nothing in the
+generator, the verification stack or the test discipline blocks the release.
+Four things a stranger hits first do:
+
+- **No `LICENSE` file.** The README has been promising one ("if/when added")
+  since v0.1.0. A public repo without one grants no rights to anybody.
+- **The README describes the Phase-1 snippet MVP** — ten snippet categories as
+  the supported set, "full simulation" listed as out of scope, and modules,
+  IPs and the whole verification stack present only as roadmap bullets.
+- **Mock mode is the frontend default and its catalog is stale**: unset
+  `NEXT_PUBLIC_API_BASE` serves 11 invented items against the real 26, with an
+  empty "IP Blocks" group and no warning of any kind. `frontend/README.md`
+  points at an `.env.example` that does not exist.
+- **CORS is hardcoded to `http://localhost:3000`** and the backend reads *no*
+  environment variables at all (one grep hit repo-wide, and it is a comment
+  about deliberately not probing the environment). The product does not run
+  outside one hardcoded origin.
+
+Each is small. Each is invisible from inside the project and immediate from
+outside it — the same shape as every defect the last four phases turned up.
+
+Also raised, not blocking: `beta` is badged on seven of nine IPs and defined
+nowhere; the AXI port table documents seventeen ports as "see the register
+block's datasheet"; the WaveDrom diagrams render as raw JSON in the UI; two
+locked PRD §15 decisions (Jinja2, IP-XACT-from-the-start) have drifted from the
+build and need reconciling by recorded decision rather than silence; and
+`GeneratedFile.kind` has now blocked three separate features (ROM `$readmemh`,
+standalone WaveDrom JSON, IP-XACT export), which is the point at which the
+contract decision gets scheduled instead of routed around.
+
+Still outstanding from Phase 4: **v0.3.0 and v0.4.0 remain untagged** (HTTP 403
+on tag refs; a human action). Tied to that, a decision — a first product launch
+numbered **v0.4.0** tells users the opposite of what the launch says. The
+rename to v1.0.0 is three files plus a golden regeneration that has twice
+produced a banner-only diff with every config hash unchanged.
