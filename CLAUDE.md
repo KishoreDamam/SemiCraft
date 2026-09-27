@@ -23,6 +23,9 @@ itself. Python backend (`backend/`), Next.js frontend (`frontend/`).
 - Domain reference: user's VLSI Agent Kit at `D:\Projects\VLSI-agkit\.agent\skills\`
   — feed relevant SKILL.md paths to RTL-producing sub-agents (plan §6b).
   SemiCraft specs win on conflicts (e.g. no `i_`/`o_` prefixes by default).
+- Frontend look and feel: use the project skills in `.claude/skills/`
+  (`redesign-existing-projects` for UI passes; see its README for the
+  SemiCraft rules that override them).
 
 ## Commands
 
