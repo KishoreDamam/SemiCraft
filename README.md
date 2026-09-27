@@ -96,10 +96,17 @@ npm install
 npm run dev
 ```
 
+To use the real backend, start it as above and run the frontend with
+`NEXT_PUBLIC_API_BASE=http://localhost:8000 npm run dev`. **Without that
+variable the UI serves canned responses from `frontend/mocks/`**, which is
+useful for frontend work but is not real generator output.
+
 The frontend is a Next.js (App Router, TypeScript) single-page generator UI:
-snippet picker + dynamic options form on the left, live Monaco preview on the
-right. It can run against a mock API layer before the backend is available;
-see `frontend/mocks/`.
+a searchable catalog and the dynamic options form on the left, the live code
+preview on the right. The Monaco editor is served by the app itself
+(`scripts/copy-monaco.mjs` copies it into `public/monaco` before `dev` and
+`build`), so the preview works on restricted networks with no CDN access; the
+code is shown as plain text until the editor has loaded.
 
 ## Architecture
 

@@ -25,15 +25,15 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex min-h-screen flex-col lg:h-screen">
       <header className="flex items-center gap-3 border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
         <h1 className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
           SemiCraft
         </h1>
-        <span className="text-xs text-zinc-500">RTL Snippet Generator</span>
+        <span className="text-xs text-zinc-500">RTL, module &amp; IP generator</span>
       </header>
 
-      <div className="min-h-0 flex-1">
+      <div className="flex-1 lg:min-h-0">
         {error ? (
           <p role="alert" className="p-4 text-sm text-red-600">
             {error}
@@ -41,7 +41,7 @@ export default function Home() {
         ) : catalog ? (
           <GeneratorApp catalog={catalog} initialState={initialState} />
         ) : (
-          <p className="p-4 text-sm text-zinc-500">Loading snippets…</p>
+          <p className="p-4 text-sm text-zinc-500">Loading catalog…</p>
         )}
       </div>
     </div>

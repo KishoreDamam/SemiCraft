@@ -44,7 +44,7 @@ describe("DynamicForm — counter schema (segmented, toggle, number)", () => {
     );
     // segmented (radio for the default option is checked)
     const dir = screen.getByRole("radiogroup", { name: "Direction" });
-    expect(within(dir).getByRole("radio", { name: "up" })).toHaveAttribute(
+    expect(within(dir).getByRole("radio", { name: "Up" })).toHaveAttribute(
       "aria-checked",
       "true",
     );
@@ -54,7 +54,7 @@ describe("DynamicForm — counter schema (segmented, toggle, number)", () => {
     const spy = vi.fn();
     render(<Harness schema={counterSchema} initial={counterDefaults} onChangeSpy={spy} />);
     const dir = screen.getByRole("radiogroup", { name: "Direction" });
-    await userEvent.click(within(dir).getByRole("radio", { name: "down" }));
+    await userEvent.click(within(dir).getByRole("radio", { name: "Down" }));
     expect(spy).toHaveBeenCalledWith("direction", "down");
   });
 
@@ -128,7 +128,7 @@ describe("DynamicForm — fsm schema (dropdown-less enums, chips, text)", () => 
     const spy = vi.fn();
     render(<Harness schema={fsmSchema} initial={fsmDefaults} onChangeSpy={spy} />);
     const enc = screen.getByRole("radiogroup", { name: "Encoding" });
-    await userEvent.click(within(enc).getByRole("radio", { name: "onehot" }));
+    await userEvent.click(within(enc).getByRole("radio", { name: "One-hot" }));
     expect(spy).toHaveBeenCalledWith("encoding", "onehot");
   });
 
@@ -181,7 +181,7 @@ describe("DynamicForm — constrained chips (comparator outputs)", () => {
   it("toggles a constrained value chip on and off", async () => {
     const spy = vi.fn();
     render(<Harness schema={cmp} initial={{ outputs: ["eq"] }} onChangeSpy={spy} />);
-    await userEvent.click(screen.getByRole("button", { name: "lt" }));
+    await userEvent.click(screen.getByRole("button", { name: "< (lt)" }));
     expect(spy).toHaveBeenCalledWith("outputs", ["eq", "lt"]);
   });
 });

@@ -9,6 +9,7 @@ import type { SimulateResponse } from "@/lib/types";
 // Stub Monaco with a <pre> that echoes the active file's text.
 vi.mock("@monaco-editor/react", () => ({
   default: ({ value }: { value: string }) => <pre data-testid="code">{value}</pre>,
+  loader: { config: vi.fn(), init: () => new Promise(() => {}) },
 }));
 
 beforeEach(() => {
@@ -36,9 +37,11 @@ describe("Run smoke sim button + log viewer", () => {
     const spy = vi.spyOn(api, "simulate").mockResolvedValue({ ok: true, data: passResult });
     render(<GeneratorApp catalog={mockCatalogV2} debounceMs={0} />);
     await waitFor(() => expect(code()).toContain("module counter"));
+    await userEvent.click(screen.getByRole("option", { name: /Edge Detector/ }));
+    await waitFor(() => expect(code()).toContain("module edge_detector"));
 
     await userEvent.click(screen.getByRole("button", { name: /Run smoke sim/ }));
-    expect(spy).toHaveBeenCalledWith("counter", expect.any(Object));
+    expect(spy).toHaveBeenCalledWith("edge-detector", expect.any(Object));
     spy.mockRestore();
   });
 
@@ -46,6 +49,8 @@ describe("Run smoke sim button + log viewer", () => {
     vi.spyOn(api, "simulate").mockResolvedValue({ ok: true, data: passResult });
     render(<GeneratorApp catalog={mockCatalogV2} debounceMs={0} />);
     await waitFor(() => expect(code()).toContain("module counter"));
+    await userEvent.click(screen.getByRole("option", { name: /Edge Detector/ }));
+    await waitFor(() => expect(code()).toContain("module edge_detector"));
 
     await userEvent.click(screen.getByRole("button", { name: /Run smoke sim/ }));
     await screen.findByText(/Sim pass/);
@@ -67,6 +72,8 @@ describe("Run smoke sim button + log viewer", () => {
     });
     render(<GeneratorApp catalog={mockCatalogV2} debounceMs={0} />);
     await waitFor(() => expect(code()).toContain("module counter"));
+    await userEvent.click(screen.getByRole("option", { name: /Edge Detector/ }));
+    await waitFor(() => expect(code()).toContain("module edge_detector"));
 
     await userEvent.click(screen.getByRole("button", { name: /Run smoke sim/ }));
     await screen.findByText(/Sim fail/);
@@ -87,6 +94,8 @@ describe("Run smoke sim button + log viewer", () => {
     });
     render(<GeneratorApp catalog={mockCatalogV2} debounceMs={0} />);
     await waitFor(() => expect(code()).toContain("module counter"));
+    await userEvent.click(screen.getByRole("option", { name: /Edge Detector/ }));
+    await waitFor(() => expect(code()).toContain("module edge_detector"));
 
     await userEvent.click(screen.getByRole("button", { name: /Run smoke sim/ }));
     await screen.findByText(/Sim unavailable/);

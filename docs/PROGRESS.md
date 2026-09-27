@@ -837,3 +837,23 @@ deliberate blocks (async FIFO, ROM) carry recorded unblock paths, and the
 scoreboard family is still unattached with a recorded reason. Nothing in Phase 4
 has ever been executed by CI — the branch it was built on is not one `ci.yml`
 triggers on — so a pull request should precede both tags.
+
+## UX pass (2026-09-27, branch `claude/customer-product-owner-review-gggw5x`)
+
+A customer / product-owner review ran the real UI against the real backend and
+found the backend's quality hidden behind the UI. First fixes landed, frontend
+only (no backend, IR or API contract change):
+
+| Fix | What changed |
+|---|---|
+| Preview never rendered offline | Monaco loaded from cdn.jsdelivr.net, so on a restricted network the preview sat at "Loading…" forever. Now served from `public/monaco` (copied by `frontend/scripts/copy-monaco.mjs` on predev/prebuild, gitignored), and the code shows as plain text while the editor loads or if it never does |
+| Options buried under 26 catalog cards | Catalog rows are one line in a bounded, searchable list; the selected item's description sits above the form. Mobile layout no longer clips the options (the page was locked to screen height) |
+| First visit opened a beta AXI IP | Default item is `counter` (then any snippet), not `catalog.items[0]` |
+| Naming style (PRD §6.5) not editable | Nested sub-models render as a fieldset instead of being skipped; the `naming` value is submitted as a whole object |
+| Raw identifiers as labels | Enum values display humanised (`sv` -> SystemVerilog, `active_low` -> Active-low); submitted values unchanged |
+| Smaller | FSM `reset_state` showed literal `null` (nullable text now empty with "(default)" and clears back to null); AXI IPs' `^(sync\|async)$`-pattern reset style is a segmented control, not free text; Run smoke sim disabled for snippets (no TB); a notice when a 422 leaves a stale result on screen; header no longer says "Snippet Generator" |
+
+Frontend: 183 tests, lint and production build green. Not yet done from the
+review: one-command Docker Compose (UI + API + Verilator) so lint badges are
+real for users, LICENSE, tagging v0.3.0/v0.4.0, README rewrite for the current
+scope.

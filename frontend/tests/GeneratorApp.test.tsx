@@ -11,6 +11,7 @@ vi.mock("@monaco-editor/react", () => ({
   default: ({ value }: { value: string }) => (
     <pre data-testid="code">{value}</pre>
   ),
+  loader: { config: vi.fn(), init: () => new Promise(() => {}) },
 }));
 
 // clipboard for copy/share buttons
@@ -80,7 +81,7 @@ describe("generate flow against mocks", () => {
     await waitFor(() => expect(code()).toContain("WIDTH = 24"));
     expect(screen.getByLabelText("Width")).toHaveValue(24);
     const dir = screen.getByRole("radiogroup", { name: "Direction" });
-    expect(within(dir).getByRole("radio", { name: "down" })).toHaveAttribute(
+    expect(within(dir).getByRole("radio", { name: "Down" })).toHaveAttribute(
       "aria-checked",
       "true",
     );
