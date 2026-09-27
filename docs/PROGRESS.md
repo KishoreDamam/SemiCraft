@@ -857,3 +857,53 @@ Frontend: 183 tests, lint and production build green. Not yet done from the
 review: one-command Docker Compose (UI + API + Verilator) so lint badges are
 real for users, LICENSE, tagging v0.3.0/v0.4.0, README rewrite for the current
 scope.
+
+### Visual design pass (same branch)
+
+The UI read as a default template. Redesigned as "a datasheet on a bench",
+with a checklist of AI-template tells as hard constraints (no purple/blue
+gradients, gradient text, glass, grain, emoji, Inter, Space Grotesk/Instrument
+Serif, serif-italic accents, icon-box rows, eyebrow badges over headlines,
+opacity-fade hovers, scroll fade-ins, stock shadcn/lucide, or em dashes in UI
+copy).
+
+- Tokens in `app/globals.css` (`paper`, `sheet`, `well`, `rule`, `ink`/`ink-2`/`ink-3`,
+  one copper `accent`, `ok`/`warn`/`err`, `code-*`), mapped into Tailwind via
+  `@theme inline`; dark mode flips the tokens, no per-component `dark:` classes.
+  Body text >= 7:1, secondary >= 4.5:1 in both schemes.
+- IBM Plex Sans + Plex Mono, self-hosted via `@fontsource` (no font CDN, same
+  reason as Monaco). Custom Monaco theme in the same palette.
+- Drawn QFP package mark (`components/Mark.tsx`) instead of an icon set.
+- Main column is a datasheet: name, description, then facts in mono (lint lamp,
+  kind, maturity, config hash); one primary action; code window with file tabs
+  in its title strip; explanation with section names in the margin.
+- Status shown as small lamps plus text, not pills.
+- Known gap: explanation text from the backend still contains em dashes; it is
+  generated content pinned by goldens, so changing it is a backend change.
+
+### Redesign audit (same branch)
+
+Ran the `redesign-existing-projects` checklist (taste-skill repo) over the
+visual pass and fixed what it flagged. Where the checklist conflicts with the
+AI-tell list above (grain/noise, glass, spotlight borders, staggered or
+scroll-driven entry), the tell list wins and the item was skipped.
+
+- Field labels in sentence case, with Pydantic's auto-title abbreviations
+  spelled out (`lib/schema.ts` `sentenceCase`: "Num Irq" -> "Number of IRQ",
+  "Cpha" -> "CPHA").
+- Datasheet column capped at 1180px, left-aligned, so wide monitors do not
+  stretch the code window and scatter the actions.
+- Code window sized to the file (max 68vh), instead of a fixed 60vh that
+  framed a 28-line snippet in a screen of empty black.
+- Loading state is a skeleton in the page's shape, not a line of text.
+- Skip link to the generator; branded SVG favicon (`app/icon.svg`, follows the
+  colour scheme) replacing the Next.js default; Open Graph title/description;
+  unused Next.js boilerplate SVGs removed.
+- `CatalogPicker` scrolls only its own list to the selected row;
+  `scrollIntoView` also moved Chromium's first-Tab target past the skip link.
+- 120ms colour transitions on controls (colours only; disabled under
+  `prefers-reduced-motion`); `text-wrap: balance/pretty` on headings and text.
+- Share link is a tertiary text action beside one secondary and one primary
+  button; toggles show "On"/"Off" beside the switch; sim status reads "Smoke sim
+  passed/failed"; sidebar section heads in sentence case; `dvh` for the app
+  height; header counts pluralise ("1 module").

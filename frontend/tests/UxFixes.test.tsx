@@ -5,7 +5,7 @@ import { useState } from "react";
 import { DynamicForm, type OptionValues } from "@/components/DynamicForm";
 import { CatalogPicker } from "@/components/CatalogPicker";
 import { GeneratorApp } from "@/components/GeneratorApp";
-import { describeField, labelFor } from "@/lib/schema";
+import { describeField, labelFor, sentenceCase } from "@/lib/schema";
 import { mockCatalogV2 } from "@/mocks/catalog";
 import type { CatalogResponse, CatalogV2Response, JsonSchema } from "@/lib/types";
 import realCatalog from "@/tests/fixtures/real-catalog.json";
@@ -91,7 +91,7 @@ describe("nullable text", () => {
   it("shows null as an empty box, and clearing submits null not ''", async () => {
     const spy = vi.fn();
     render(<Harness schema={schema} initial={{ reset_state: null }} onChangeSpy={spy} />);
-    const box = screen.getByLabelText("Reset State");
+    const box = screen.getByLabelText("Reset state");
     expect(box).toHaveValue("");
     expect(box).toHaveAttribute("placeholder", "(default)");
     await userEvent.type(box, "x");
@@ -109,6 +109,17 @@ describe("enum value labels", () => {
     expect(labelFor("rising")).toBe("Rising");
     expect(labelFor("some_new_value")).toBe("Some new value");
     expect(labelFor(16)).toBe("16");
+  });
+});
+
+describe("field labels", () => {
+  it("are sentence case, with Pydantic's abbreviations spelled out", () => {
+    expect(sentenceCase("Include Wrapper")).toBe("Include wrapper");
+    expect(sentenceCase("Num Irq")).toBe("Number of IRQ");
+    expect(sentenceCase("Cpha")).toBe("CPHA");
+    expect(sentenceCase("Irq Regs")).toBe("IRQ registers");
+    expect(sentenceCase("Impl")).toBe("Implementation");
+    expect(sentenceCase("Data Width")).toBe("Data width");
   });
 });
 

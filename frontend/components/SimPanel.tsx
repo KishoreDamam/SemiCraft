@@ -1,40 +1,41 @@
 "use client";
 
 import type { SimStatus, SimulateResponse } from "@/lib/types";
+import { Lamp } from "@/components/LintBadge";
 
 /**
  * Smoke-sim log viewer (P3-03): a status badge plus the compile/run stdout and
  * stderr tails returned by POST /api/v2/simulate. Renders nothing until the
  * user has run a sim at least once for the current item.
  *
- * Status → badge mapping mirrors LintBadge's visual language:
+ * Status -> lamp mapping mirrors LintBadge's visual language:
  *   pass        -> green
  *   fail/error  -> red
  *   unavailable -> grey (no verilator in this environment)
  *   no_tb       -> grey (item has no testbench)
  */
 
-const BADGE: Record<SimStatus, { className: string; label: string; title?: string }> = {
-  pass: {
-    className: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300",
-    label: "Sim pass · SMOKE PASS",
-  },
-  fail: {
-    className: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
-    label: "Sim fail",
-  },
+const BADGE: Record<
+  SimStatus,
+  { tone: "ok" | "err" | "off"; text: string; label: string; title?: string }
+> = {
+  pass: { tone: "ok", text: "text-ok", label: "Smoke sim passed" },
+  fail: { tone: "err", text: "text-err", label: "Smoke sim failed" },
   error: {
-    className: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
-    label: "Sim error",
-    title: "Compile error or timeout — see the log below.",
+    tone: "err",
+    text: "text-err",
+    label: "Smoke sim did not finish",
+    title: "Compile error or timeout. The log below has the details.",
   },
   unavailable: {
-    className: "bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
-    label: "Sim unavailable",
-    title: "Verilator not available in this environment.",
+    tone: "off",
+    text: "text-ink-3",
+    label: "Smoke sim unavailable",
+    title: "Verilator is not installed where the API runs.",
   },
   no_tb: {
-    className: "bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
+    tone: "off",
+    text: "text-ink-3",
     label: "No testbench",
     title: "This item generates no smoke testbench.",
   },
@@ -44,10 +45,8 @@ function LogBlock({ title, text }: { title: string; text: string }) {
   if (!text) return null;
   return (
     <div className="flex flex-col gap-1">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-        {title}
-      </div>
-      <pre className="max-h-48 overflow-auto rounded bg-zinc-950 p-2 font-mono text-[11px] leading-relaxed text-zinc-200">
+      <div className="label-caps">{title}</div>
+      <pre className="max-h-48 overflow-auto rounded-sm bg-code-bg p-3 font-mono text-xs leading-relaxed text-code-ink">
         {text}
       </pre>
     </div>
@@ -61,18 +60,15 @@ export function SimPanel({ result }: { result: SimulateResponse | null }) {
   const hasLogs = Boolean(result.stdout_tail || result.stderr_tail);
 
   return (
-    <section aria-label="Smoke sim result" className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <span
-          className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs font-medium ${badge.className}`}
-          title={badge.title}
-        >
-          <span aria-hidden>●</span> {badge.label}
+    <section aria-label="Smoke sim result" className="flex flex-col gap-3 border-t border-rule pt-3">
+      <div className="flex flex-wrap items-center gap-3 font-mono text-xs">
+        <span className={`inline-flex items-center gap-2 ${badge.text}`} title={badge.title}>
+          <Lamp tone={badge.tone} /> {badge.label}
         </span>
         {result.exit_code !== null ? (
-          <span className="text-[11px] text-zinc-400">exit {result.exit_code}</span>
+          <span className="text-ink-3">exit {result.exit_code}</span>
         ) : null}
-        <span className="text-[11px] text-zinc-400">
+        <span className="text-ink-3">
           {result.duration_s.toFixed(2)}s
         </span>
       </div>

@@ -97,8 +97,8 @@ function widgetInput(
           onChange={(e) =>
             onChange(d.nullable && e.target.value === "" ? null : e.target.value)
           }
-          className={`w-full rounded border bg-white px-2 py-1 text-xs text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 ${
-            invalid ? "border-red-500" : "border-zinc-300 dark:border-zinc-700"
+          className={`h-8 w-full rounded-sm border bg-sheet px-2 font-mono text-[13px] text-ink placeholder:font-sans placeholder:text-ink-3 ${
+            invalid ? "border-err" : "border-rule-strong hover:border-ink-3"
           }`}
         />
       );
@@ -130,12 +130,10 @@ function Field({
       value && typeof value === "object" ? (value as Record<string, unknown>) : {};
     return (
       <fieldset
-        className="flex flex-col gap-3 rounded border border-zinc-200 p-3 dark:border-zinc-800"
+        className="flex flex-col gap-3 border-l border-rule-strong pl-3"
         data-field
       >
-        <legend className="px-1 text-xs font-medium text-zinc-700 dark:text-zinc-300">
-          {d.label}
-        </legend>
+        <legend className="mb-2 text-[13px] font-medium text-ink-2">{d.label}</legend>
         {(d.fields ?? []).map((sub) => (
           <Field
             key={sub.name}
@@ -183,7 +181,7 @@ export function DynamicForm({
 
   return (
     <form
-      className="flex flex-col gap-3"
+      className="flex flex-col gap-4"
       onSubmit={(e) => e.preventDefault()}
       aria-label="Snippet options"
     >

@@ -5,9 +5,9 @@ import type { LintFileReport, LintMessage, LintReport, LintStatus } from "@/lib/
 
 /**
  * Lint badge (WP-07 task 4, extended for API v2 in P2-05b):
- *   clean       -> green "Lint clean · verilator -Wall"
- *   warnings    -> amber, expandable message list
- *   unavailable -> grey
+ *   clean       -> green lamp, "Lint clean · verilator -Wall"
+ *   warnings    -> amber lamp, expandable message list
+ *   unavailable -> hollow grey lamp
  *
  * Accepts either the v1 single LintReport or the v2 list of per-file reports.
  * For the list shape the badge aggregates to the worst status across rtl files
@@ -50,22 +50,35 @@ function aggregate(lint: LintInput): {
   return { status, groups, count };
 }
 
+/** Status lamp: a small square, solid when there is a result, hollow when not. */
+export function Lamp({ tone }: { tone: "ok" | "warn" | "err" | "off" }) {
+  const cls = {
+    ok: "bg-ok",
+    warn: "bg-warn",
+    err: "bg-err",
+    off: "border border-ink-3",
+  }[tone];
+  return <span aria-hidden className={`inline-block h-2 w-2 shrink-0 rounded-[1px] ${cls}`} />;
+}
+
+const STATUS_TEXT = "inline-flex items-center gap-2 font-mono text-xs";
+
 export function LintBadge({ lint }: { lint: LintInput }) {
   const [open, setOpen] = useState(false);
   const agg = aggregate(lint);
 
   if (!agg) {
     return (
-      <span className="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium text-zinc-400">
-        Lint —
+      <span className={`${STATUS_TEXT} text-ink-3`}>
+        <Lamp tone="off" /> Lint pending
       </span>
     );
   }
 
   if (agg.status === "clean") {
     return (
-      <span className="inline-flex items-center gap-1 rounded bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/40 dark:text-green-300">
-        <span aria-hidden>●</span> Lint clean · verilator -Wall
+      <span className={`${STATUS_TEXT} text-ok`}>
+        <Lamp tone="ok" /> Lint clean · verilator -Wall
       </span>
     );
   }
@@ -73,10 +86,10 @@ export function LintBadge({ lint }: { lint: LintInput }) {
   if (agg.status === "unavailable") {
     return (
       <span
-        className="inline-flex items-center gap-1 rounded bg-zinc-200 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
-        title="Verilator not available in this environment."
+        className={`${STATUS_TEXT} text-ink-3`}
+        title="Verilator is not installed where the API runs. Use the Docker image for real lint results."
       >
-        <span aria-hidden>○</span> Lint unavailable
+        <Lamp tone="off" /> Lint unavailable
       </span>
     );
   }
@@ -88,14 +101,14 @@ export function LintBadge({ lint }: { lint: LintInput }) {
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-300"
+        className={`${STATUS_TEXT} rounded-sm text-warn hover:underline`}
       >
-        <span aria-hidden>▲</span> {agg.count} lint warning
+        <Lamp tone="warn" /> {agg.count} lint warning
         {agg.count === 1 ? "" : "s"}
         <span aria-hidden>{open ? "▾" : "▸"}</span>
       </button>
       {open ? (
-        <div className="mt-1 flex flex-col gap-2 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+        <div className="mt-2 flex flex-col gap-2 border-t border-rule pt-2 text-xs text-ink">
           {agg.groups.map((g, gi) => (
             <div key={g.path ?? gi} className="flex flex-col gap-1">
               {g.path ? (
