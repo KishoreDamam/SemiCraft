@@ -880,3 +880,30 @@ copy).
 - Status shown as small lamps plus text, not pills.
 - Known gap: explanation text from the backend still contains em dashes; it is
   generated content pinned by goldens, so changing it is a backend change.
+
+### Redesign audit (same branch)
+
+Ran the `redesign-existing-projects` checklist (taste-skill repo) over the
+visual pass and fixed what it flagged. Where the checklist conflicts with the
+AI-tell list above (grain/noise, glass, spotlight borders, staggered or
+scroll-driven entry), the tell list wins and the item was skipped.
+
+- Field labels in sentence case, with Pydantic's auto-title abbreviations
+  spelled out (`lib/schema.ts` `sentenceCase`: "Num Irq" -> "Number of IRQ",
+  "Cpha" -> "CPHA").
+- Datasheet column capped at 1180px, left-aligned, so wide monitors do not
+  stretch the code window and scatter the actions.
+- Code window sized to the file (max 68vh), instead of a fixed 60vh that
+  framed a 28-line snippet in a screen of empty black.
+- Loading state is a skeleton in the page's shape, not a line of text.
+- Skip link to the generator; branded SVG favicon (`app/icon.svg`, follows the
+  colour scheme) replacing the Next.js default; Open Graph title/description;
+  unused Next.js boilerplate SVGs removed.
+- `CatalogPicker` scrolls only its own list to the selected row;
+  `scrollIntoView` also moved Chromium's first-Tab target past the skip link.
+- 120ms colour transitions on controls (colours only; disabled under
+  `prefers-reduced-motion`); `text-wrap: balance/pretty` on headings and text.
+- Share link is a tertiary text action beside one secondary and one primary
+  button; toggles show "On"/"Off" beside the switch; sim status reads "Smoke sim
+  passed/failed"; sidebar section heads in sentence case; `dvh` for the app
+  height; header counts pluralise ("1 module").

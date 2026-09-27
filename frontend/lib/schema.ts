@@ -136,7 +136,7 @@ export function describeField(
   root: JsonSchema,
 ): WidgetDescriptor {
   const s = flattenSchema(rawSchema, root);
-  const label = s.title ?? humanize(name);
+  const label = sentenceCase(s.title ?? humanize(name));
   const common = {
     name,
     label,
@@ -186,7 +186,7 @@ export function describeField(
     // name ("NamingOptions") and its description is a developer docstring.
     return {
       ...common,
-      label: rawSchema.title ?? humanize(name),
+      label: sentenceCase(rawSchema.title ?? humanize(name)),
       description: rawSchema.description,
       kind: "nested",
       fields,
@@ -241,6 +241,39 @@ export function describeSchema(root: JsonSchema): WidgetDescriptor[] {
     // A nested object with no properties has nothing to render; it submits
     // at its default.
     .filter((d) => d.kind !== "nested" || (d.fields?.length ?? 0) > 0);
+}
+
+/**
+ * Words in Pydantic's auto-titles that are abbreviations: spelled out, or
+ * kept in capitals, so "Num Irq" reads "Number of IRQ".
+ */
+const LABEL_WORDS: Record<string, string> = {
+  num: "number of",
+  impl: "implementation",
+  regs: "registers",
+  irq: "IRQ",
+  cpha: "CPHA",
+  cpol: "CPOL",
+  axi: "AXI",
+  fifo: "FIFO",
+  io: "I/O",
+};
+
+/**
+ * Sentence case for field labels ("Include wrapper", not "Include Wrapper").
+ * A word already in capitals (an acronym the schema spelled out) is kept.
+ */
+export function sentenceCase(title: string): string {
+  const out = title
+    .split(" ")
+    .map((w) => {
+      if (!w) return w;
+      const mapped = LABEL_WORDS[w.toLowerCase()];
+      if (mapped) return mapped;
+      return w.length > 1 && w === w.toUpperCase() ? w : w.toLowerCase();
+    })
+    .join(" ");
+  return out.charAt(0).toUpperCase() + out.slice(1);
 }
 
 function humanize(name: string): string {

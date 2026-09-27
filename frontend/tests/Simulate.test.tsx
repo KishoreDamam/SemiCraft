@@ -53,7 +53,7 @@ describe("Run smoke sim button + log viewer", () => {
     await waitFor(() => expect(code()).toContain("module edge_detector"));
 
     await userEvent.click(screen.getByRole("button", { name: /Run smoke sim/ }));
-    await screen.findByText(/Sim pass/);
+    await screen.findByText(/Smoke sim passed/);
     expect(screen.getByText(/SMOKE PASS: edge_detector/)).toBeInTheDocument();
     expect(screen.getByText(/exit 0/)).toBeInTheDocument();
   });
@@ -76,7 +76,7 @@ describe("Run smoke sim button + log viewer", () => {
     await waitFor(() => expect(code()).toContain("module edge_detector"));
 
     await userEvent.click(screen.getByRole("button", { name: /Run smoke sim/ }));
-    await screen.findByText(/Sim fail/);
+    await screen.findByText(/Smoke sim failed/);
     expect(screen.getByText(/%Fatal: assertion failed/)).toBeInTheDocument();
   });
 
@@ -98,7 +98,7 @@ describe("Run smoke sim button + log viewer", () => {
     await waitFor(() => expect(code()).toContain("module edge_detector"));
 
     await userEvent.click(screen.getByRole("button", { name: /Run smoke sim/ }));
-    await screen.findByText(/Sim unavailable/);
+    await screen.findByText(/Smoke sim unavailable/);
     // no exit code shown when exit_code is null
     expect(screen.queryByText(/exit/)).not.toBeInTheDocument();
   });

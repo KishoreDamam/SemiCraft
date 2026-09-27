@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+  <style>
+    .m { stroke: #1b1a17; }
+    .d { fill: #a4481f; }
+    @media (prefers-color-scheme: dark) {
+      .m { stroke: #eeebe3; }
+      .d { fill: #e08257; }
+    }
+  </style>
+  <g class="m" fill="none" stroke-width="1.6" stroke-linecap="square">
+    <rect x="4.5" y="4.5" width="11" height="11"/>
+    <path d="M7 1.5V4.5M10 1.5V4.5M13 1.5V4.5M7 15.5V18.5M10 15.5V18.5M13 15.5V18.5M1.5 7H4.5M1.5 10H4.5M1.5 13H4.5M15.5 7H18.5M15.5 10H18.5M15.5 13H18.5"/>
+  </g>
+  <circle class="d" cx="7.6" cy="7.6" r="1.1"/>
+</svg>

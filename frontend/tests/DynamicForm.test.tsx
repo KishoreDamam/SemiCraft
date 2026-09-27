@@ -135,7 +135,7 @@ describe("DynamicForm — fsm schema (dropdown-less enums, chips, text)", () => 
   it("renders reset_state as a text input", async () => {
     const spy = vi.fn();
     render(<Harness schema={fsmSchema} initial={fsmDefaults} onChangeSpy={spy} />);
-    const rs = screen.getByLabelText("Reset State");
+    const rs = screen.getByLabelText("Reset state");
     await userEvent.clear(rs);
     await userEvent.type(rs, "run");
     expect(spy).toHaveBeenLastCalledWith("reset_state", "run");

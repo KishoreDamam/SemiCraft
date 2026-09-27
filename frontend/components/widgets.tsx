@@ -153,24 +153,31 @@ export function Toggle({
   onChange: (v: boolean) => void;
   label: string;
 }) {
+  // The state is written beside the switch too: a filled block alone does not
+  // say which way is on.
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={value}
-      aria-label={label}
-      onClick={() => onChange(!value)}
-      className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-sm border ${
-        value ? "border-ink bg-ink" : "border-rule-strong bg-well"
-      }`}
-    >
-      <span
-        className={`inline-block h-4 w-4 rounded-[2px] transition-transform duration-100 ${
-          value ? "translate-x-[22px] bg-paper" : "translate-x-[3px] bg-ink-3"
+    <span className="inline-flex items-center gap-2.5">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={value}
+        aria-label={label}
+        onClick={() => onChange(!value)}
+        className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-sm border ${
+          value ? "border-ink bg-ink" : "border-rule-strong bg-well"
         }`}
-      />
-      <span className="sr-only">{value ? "on" : "off"}</span>
-    </button>
+      >
+        <span
+          className={`inline-block h-4 w-4 rounded-[2px] transition-transform duration-100 ${
+            value ? "translate-x-[22px] bg-paper" : "translate-x-[3px] bg-ink-3"
+          }`}
+        />
+        <span className="sr-only">{value ? "on" : "off"}</span>
+      </button>
+      <span aria-hidden className="font-mono text-xs text-ink-3">
+        {value ? "On" : "Off"}
+      </span>
+    </span>
   );
 }
 

@@ -48,10 +48,19 @@ export function CatalogPicker({
   const visible = items.filter((i) => matches(i, query));
 
   // Keep the selected row in view (e.g. when a permalink selects an IP far
-  // down the list). scrollIntoView is absent in jsdom, hence the guard.
+  // down the list). Scrolls the list box only: scrollIntoView would also
+  // scroll the page on a phone, and in Chromium it moves where the first Tab
+  // lands, which skipped the skip link.
   useEffect(() => {
-    const el = listRef.current?.querySelector<HTMLElement>('[aria-selected="true"]');
-    el?.scrollIntoView?.({ block: "nearest" });
+    const list = listRef.current;
+    const el = list?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!list || !el) return;
+    const top = el.offsetTop; // the list is the rows' offsetParent
+    if (top < list.scrollTop) {
+      list.scrollTop = top;
+    } else if (top + el.offsetHeight > list.scrollTop + list.clientHeight) {
+      list.scrollTop = top + el.offsetHeight - list.clientHeight;
+    }
   }, [selectedId]);
 
   return (
@@ -68,7 +77,7 @@ export function CatalogPicker({
         ref={listRef}
         role="listbox"
         aria-label="Catalog"
-        className="-mx-1 flex max-h-[34vh] flex-col gap-3 overflow-y-auto px-1 py-1"
+        className="relative -mx-1 flex max-h-[34vh] flex-col gap-3 overflow-y-auto px-1 py-1"
       >
         {GROUPS.map(({ kind, label }) => {
           const group = visible.filter((i) => i.kind === kind);

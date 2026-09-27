@@ -19,18 +19,18 @@ const BADGE: Record<
   SimStatus,
   { tone: "ok" | "err" | "off"; text: string; label: string; title?: string }
 > = {
-  pass: { tone: "ok", text: "text-ok", label: "Sim pass · SMOKE PASS" },
-  fail: { tone: "err", text: "text-err", label: "Sim fail" },
+  pass: { tone: "ok", text: "text-ok", label: "Smoke sim passed" },
+  fail: { tone: "err", text: "text-err", label: "Smoke sim failed" },
   error: {
     tone: "err",
     text: "text-err",
-    label: "Sim error",
+    label: "Smoke sim did not finish",
     title: "Compile error or timeout. The log below has the details.",
   },
   unavailable: {
     tone: "off",
     text: "text-ink-3",
-    label: "Sim unavailable",
+    label: "Smoke sim unavailable",
     title: "Verilator is not installed where the API runs.",
   },
   no_tb: {

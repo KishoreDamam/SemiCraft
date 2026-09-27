@@ -104,3 +104,57 @@ body {
   text-transform: uppercase;
   color: var(--ink-3);
 }
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+p,
+li,
+dd {
+  text-wrap: pretty;
+}
+
+/*
+ * Controls change colour over a short, fixed time so hover and selection read
+ * as a response rather than a flicker. Only colours move; nothing fades out,
+ * nothing slides in.
+ */
+button,
+a,
+input,
+select,
+[role="option"],
+[role="tab"] {
+  transition-property: color, background-color, border-color, text-decoration-color;
+  transition-duration: 120ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0ms !important;
+  }
+}
+
+/* Keyboard users land on this first; it stays off-screen until focused. */
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: -48px;
+  z-index: 50;
+  padding: 8px 12px;
+  border-radius: 2px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.skip-link:focus {
+  top: 12px;
+}
