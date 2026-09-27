@@ -25,6 +25,19 @@ import { ExplanationPanel } from "@/components/ExplanationPanel";
 
 const DEBOUNCE_MS = 300;
 
+/**
+ * What a first visit opens on: a plain snippet rather than whatever sorts
+ * first (alphabetically that is a beta AXI IP with seven files). Counter is
+ * the PRD's lead user story; any snippet will do if it is absent.
+ */
+function defaultItem(catalog: CatalogV2Response): CatalogItem {
+  return (
+    itemById(catalog, "counter") ??
+    catalog.items.find((i) => i.kind === "snippet") ??
+    catalog.items[0]
+  );
+}
+
 function itemById(
   catalog: CatalogV2Response,
   id: string | null,
@@ -48,7 +61,7 @@ export function GeneratorApp({
   initialState?: PermalinkState | null;
   debounceMs?: number;
 }) {
-  const firstItem = catalog.items[0];
+  const firstItem = defaultItem(catalog);
 
   const initialItem =
     (initialState && itemById(catalog, initialState.snippet_id)) || firstItem;
@@ -141,11 +154,17 @@ export function GeneratorApp({
 
   const onFieldChange = (name: string, value: unknown) => {
     setValues((prev) => ({ ...prev, [name]: value }));
-    // Clear the inline error for a field as soon as the user edits it.
+    // Clear the inline error for a field as soon as the user edits it. A
+    // nested sub-model reports errors under its own keys (422 loc ends in the
+    // sub-field), so editing it clears those too.
+    const keys =
+      value && typeof value === "object" && !Array.isArray(value)
+        ? [name, ...Object.keys(value)]
+        : [name];
     setFieldErrors((prev) => {
-      if (!(name in prev)) return prev;
+      if (!keys.some((k) => k in prev)) return prev;
       const next = { ...prev };
-      delete next[name];
+      for (const k of keys) delete next[k];
       return next;
     });
   };
@@ -153,6 +172,11 @@ export function GeneratorApp({
   const files = result?.files ?? [];
   const current = files[activeFile] ?? files[0] ?? null;
   const isMultiFile = files.length > 1;
+  // Snippets carry no testbench; the sim endpoint would only answer "no_tb".
+  const hasTb = item.kind !== "snippet";
+  // A 422 leaves the previous result on screen; say so rather than let the
+  // preview and explanation silently describe a different configuration.
+  const stale = result !== null && Object.keys(fieldErrors).length > 0;
 
   const onCopy = async () => {
     if (!current) return;
@@ -212,9 +236,9 @@ export function GeneratorApp({
     current?.kind === "doc" ? "markdown" : result?.language ?? "sv";
 
   return (
-    <div className="grid h-full grid-cols-1 gap-4 p-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+    <div className="grid grid-cols-1 gap-4 p-4 lg:h-full lg:grid-cols-[320px_minmax(0,1fr)]">
       {/* Left panel: picker + options form */}
-      <aside className="flex min-h-0 flex-col gap-4 overflow-y-auto">
+      <aside className="flex flex-col gap-4 lg:min-h-0 lg:overflow-y-auto">
         <div>
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
             Catalog
@@ -224,6 +248,17 @@ export function GeneratorApp({
             selectedId={itemId}
             onSelect={onSelectItem}
           />
+        </div>
+        <div className="rounded bg-zinc-50 px-3 py-2 dark:bg-zinc-900">
+          <div className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+            {item.name}
+            {item.maturity === "beta" ? (
+              <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">
+                beta
+              </span>
+            ) : null}
+          </div>
+          <p className="text-xs text-zinc-600 dark:text-zinc-400">{item.description}</p>
         </div>
         <div>
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
@@ -239,7 +274,7 @@ export function GeneratorApp({
       </aside>
 
       {/* Right panel: preview + affordances + explanation */}
-      <main className="flex min-h-0 flex-col gap-3">
+      <main className="flex flex-col gap-3 lg:min-h-0">
         <div className="flex flex-wrap items-center gap-2">
           <LintBadge lint={result?.lint ?? null} />
           <span className="text-xs text-zinc-400">
@@ -251,7 +286,12 @@ export function GeneratorApp({
             <button
               type="button"
               onClick={onRunSim}
-              disabled={!result || simBusy}
+              disabled={!result || !hasTb || simBusy}
+              title={
+                !hasTb
+                  ? "Snippets have no testbench; pick a module or IP block to simulate."
+                  : undefined
+              }
               className="rounded border border-zinc-300 px-3 py-1 text-xs text-zinc-700 hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
             >
               {simBusy ? "Running…" : "Run smoke sim"}
@@ -299,13 +339,19 @@ export function GeneratorApp({
           </p>
         ) : null}
 
+        {stale ? (
+          <p role="status" className="rounded bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+            Fix the highlighted option to regenerate. Showing the last valid result.
+          </p>
+        ) : null}
+
         <FileTabs
           files={files}
           activeIndex={activeFile}
           onSelect={setActiveFile}
         />
 
-        <div className="min-h-[300px] flex-1">
+        <div className="h-[60vh] min-h-[300px] lg:h-auto lg:flex-1">
           <CodePreview
             code={current?.text ?? "// Adjust options to generate RTL…"}
             language={previewLanguage}

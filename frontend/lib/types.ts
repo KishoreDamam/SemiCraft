@@ -37,6 +37,8 @@ export interface JsonSchema {
   anyOf?: JsonSchema[];
   // const (single-value enum sometimes emitted this way)
   const?: unknown;
+  // string constraint; a plain `^(a|b)$` alternation is read as an enum
+  pattern?: string;
 }
 
 export type JsonSchemaType =

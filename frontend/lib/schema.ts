@@ -37,6 +37,11 @@ export interface WidgetDescriptor {
   maxItems?: number;
   uniqueItems?: boolean;
   itemEnum?: EnumOption[]; // constrained set for chip values (e.g. comparator)
+  // text widgets: the schema also admits null (Pydantic Optional[str]), so an
+  // empty input submits null ("use the default") rather than "".
+  nullable?: boolean;
+  // nested widgets: descriptors for the sub-model's own properties
+  fields?: WidgetDescriptor[];
 }
 
 const SEGMENTED_MAX_OPTIONS = 4;
@@ -87,8 +92,34 @@ function primaryType(s: JsonSchema): JsonSchemaType | undefined {
   return s.type;
 }
 
-function labelFor(value: unknown): string {
-  return String(value);
+/**
+ * Display labels for enum values the backend emits as terse identifiers. The
+ * submitted value is always the raw enum member; only the button text changes.
+ */
+const VALUE_LABELS: Record<string, string> = {
+  sv: "SystemVerilog",
+  verilog: "Verilog",
+  active_high: "Active-high",
+  active_low: "Active-low",
+  updown: "Up/down",
+  onehot: "One-hot",
+  snake: "snake_case",
+  camel: "camelCase",
+  simple_dual: "Simple dual-port",
+  eq: "== (eq)",
+  ne: "!= (ne)",
+  lt: "< (lt)",
+  le: "<= (le)",
+  gt: "> (gt)",
+  ge: ">= (ge)",
+};
+
+export function labelFor(value: unknown): string {
+  if (typeof value !== "string") return String(value);
+  const known = VALUE_LABELS[value];
+  if (known) return known;
+  const words = value.replace(/_/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 function toEnumOptions(values: unknown[]): EnumOption[] {
@@ -115,9 +146,13 @@ export function describeField(
 
   const type = primaryType(s);
 
-  // Enum (string or integer) -> segmented or dropdown.
-  if (s.enum && s.enum.length > 0) {
-    const options = toEnumOptions(s.enum);
+  // Enum (string or integer) -> segmented or dropdown. Some models constrain
+  // a str with a plain alternation pattern (the AXI IPs' `^(sync|async)$`)
+  // rather than a Literal; that is an enum too, not free text.
+  const values =
+    s.enum && s.enum.length > 0 ? s.enum : type === "string" ? patternEnum(s.pattern) : undefined;
+  if (values) {
+    const options = toEnumOptions(values);
     return {
       ...common,
       kind: options.length <= SEGMENTED_MAX_OPTIONS ? "segmented" : "dropdown",
@@ -141,10 +176,21 @@ export function describeField(
   }
 
   // Nested object (Pydantic sub-model reached via $ref, e.g. NamingOptions).
-  // The flat MVP form has no widget for these; mark them so the renderer can
-  // skip them. Their value still round-trips via the snippet defaults.
+  // Rendered as a grouped fieldset of its own properties; the sub-model's
+  // $defs live on the root schema, so resolve against `root`, not `s`.
   if (type === "object" || s.properties) {
-    return { ...common, kind: "nested" };
+    const fields = Object.entries(s.properties ?? {}).map(([sub, subSchema]) =>
+      describeField(sub, subSchema, root),
+    );
+    // Label from the property itself: the $def's title is the Python class
+    // name ("NamingOptions") and its description is a developer docstring.
+    return {
+      ...common,
+      label: rawSchema.title ?? humanize(name),
+      description: rawSchema.description,
+      kind: "nested",
+      fields,
+    };
   }
 
   if (type === "array") {
@@ -162,7 +208,16 @@ export function describeField(
   }
 
   // string / fallback
-  return { ...common, kind: "text" };
+  const nullable =
+    rawSchema.anyOf?.some((b) => b.type === "null") ??
+    (Array.isArray(rawSchema.type) && rawSchema.type.includes("null"));
+  return { ...common, kind: "text", nullable: nullable || undefined };
+}
+
+/** `^(a|b|c)$` -> ["a", "b", "c"]; anything richer is not an enum. */
+function patternEnum(pattern: string | undefined): string[] | undefined {
+  const m = pattern ? /^\^\(([\w]+(?:\|[\w]+)+)\)\$$/.exec(pattern) : null;
+  return m ? m[1].split("|") : undefined;
 }
 
 /** Normalise Pydantic's inclusive/exclusive numeric bounds to inclusive. */
@@ -183,8 +238,9 @@ export function describeSchema(root: JsonSchema): WidgetDescriptor[] {
   if (!root.properties) return [];
   return Object.entries(root.properties)
     .map(([name, sub]) => describeField(name, sub, root))
-    // Nested-object fields have no flat widget; they submit at their default.
-    .filter((d) => d.kind !== "nested");
+    // A nested object with no properties has nothing to render; it submits
+    // at its default.
+    .filter((d) => d.kind !== "nested" || (d.fields?.length ?? 0) > 0);
 }
 
 function humanize(name: string): string {

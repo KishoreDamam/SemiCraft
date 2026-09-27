@@ -61,9 +61,10 @@ describe("real schema interpretation — every snippet", () => {
         expect(descriptors.length).toBeGreaterThan(0);
       });
 
-      it("gives every non-nested property a real widget kind", () => {
+      it("gives every property a real widget kind, nested fields included", () => {
         // Every rendered descriptor must have one of the known widget kinds;
         // in particular none should silently fall through to a bogus state.
+        // A nested sub-model is a fieldset whose own fields obey the same rule.
         const known = new Set([
           "segmented",
           "dropdown",
@@ -73,19 +74,18 @@ describe("real schema interpretation — every snippet", () => {
           "text",
         ]);
         for (const d of descriptors) {
-          expect(known.has(d.kind)).toBe(true);
+          if (d.kind === "nested") {
+            expect(d.fields?.length ?? 0).toBeGreaterThan(0);
+            for (const f of d.fields!) expect(known.has(f.kind)).toBe(true);
+          } else {
+            expect(known.has(d.kind)).toBe(true);
+          }
         }
       });
 
-      it("covers every property (rendered, or a skipped nested object)", () => {
-        // Each schema property must be accounted for: it either renders as a
-        // widget, or it is a nested object (Pydantic sub-model) intentionally
-        // skipped by the flat form. Nothing may be dropped for other reasons.
+      it("renders every property: nothing is silently dropped", () => {
         for (const name of propKeys(schema)) {
-          if (byName.has(name)) continue;
-          const raw = schema.properties![name];
-          const d = describeField(name, raw, schema);
-          expect(d.kind).toBe("nested");
+          expect(byName.has(name)).toBe(true);
         }
       });
 
@@ -102,7 +102,11 @@ describe("real schema interpretation — every snippet", () => {
         // property schema for list fields with a default_factory-style default,
         // so their default is only guaranteed via the `defaults` payload (see
         // the separate check below). That's correct Pydantic behaviour, not a bug.
-        for (const d of descriptors) {
+        // A nested sub-model's default is its fields' defaults.
+        const leaves = descriptors.flatMap((d) =>
+          d.kind === "nested" ? d.fields ?? [] : [d],
+        );
+        for (const d of leaves) {
           if (d.kind === "chips") continue;
           expect(d.default).not.toBeUndefined();
         }
@@ -162,13 +166,27 @@ describe("real schema — specific known shapes", () => {
     expect(lang.options?.map((o) => o.value)).toEqual(["sv", "verilog"]);
   });
 
-  it("counter: nested `naming` sub-model is skipped, not rendered as text", () => {
+  it("counter: nested `naming` sub-model renders as a fieldset of its fields", () => {
     const schema = entry("counter").json_schema as JsonSchema;
-    const names = describeSchema(schema).map((d) => d.name);
-    expect(names).not.toContain("naming");
-    // But it IS a real property; interpreter classifies it as nested.
-    const d = describeField("naming", schema.properties!.naming, schema);
+    const d = describeSchema(schema).find((x) => x.name === "naming")!;
     expect(d.kind).toBe("nested");
+    // Labelled from the property, not the Python class name of its $def.
+    expect(d.label).toBe("Naming");
+    const fields = new Map(d.fields!.map((f) => [f.name, f]));
+    expect([...fields.keys()]).toEqual(["convention", "prefix", "suffix"]);
+    expect(fields.get("convention")!.kind).toBe("segmented");
+    expect(fields.get("convention")!.options?.map((o) => o.value)).toEqual([
+      "snake",
+      "camel",
+    ]);
+    expect(fields.get("prefix")!.kind).toBe("text");
+  });
+
+  it("fsm: Optional[str] reset_state is a nullable text field", () => {
+    const schema = entry("fsm").json_schema as JsonSchema;
+    const d = describeField("reset_state", schema.properties!.reset_state, schema);
+    expect(d.kind).toBe("text");
+    expect(d.nullable).toBe(true);
   });
 
   it("fsm: states array-of-string -> chips with item bounds, no itemEnum", () => {

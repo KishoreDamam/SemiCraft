@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored Monaco AMD build (scripts/copy-monaco.mjs), not our source.
+    "public/monaco/**",
   ]),
 ]);
 

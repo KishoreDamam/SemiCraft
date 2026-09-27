@@ -9,6 +9,7 @@ import * as api from "@/lib/api";
 // Stub Monaco with a <pre> that echoes the active file's text.
 vi.mock("@monaco-editor/react", () => ({
   default: ({ value }: { value: string }) => <pre data-testid="code">{value}</pre>,
+  loader: { config: vi.fn(), init: () => new Promise(() => {}) },
 }));
 
 beforeEach(() => {
