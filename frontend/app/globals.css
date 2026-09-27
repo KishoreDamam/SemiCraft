@@ -1,26 +1,106 @@
 @import "tailwindcss";
 
+/*
+ * SemiCraft visual system: a datasheet on a bench.
+ *
+ * Warm paper and ink rather than white and grey; one accent (copper, the
+ * colour of a bond wire and a PCB trace); hairline rules instead of cards and
+ * shadows; IBM Plex, a face drawn for engineering documentation, with its
+ * mono for anything a tool emitted. Every colour below is a token, and both
+ * schemes hold body text at >= 7:1 and secondary text at >= 4.5:1.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --paper: #f4f2ec; /* page */
+  --sheet: #fbfaf6; /* raised surfaces: inputs, the main column */
+  --well: #ebe8df; /* hover fills, sunken rows */
+  --rule: #d9d5c9; /* hairlines */
+  --rule-strong: #b9b4a6;
+  --ink: #1b1a17;
+  --ink-2: #4a4740;
+  --ink-3: #6b675d;
+  --accent: #a4481f; /* copper */
+  --accent-ink: #fbfaf6;
+  --ok: #2d6a3a;
+  --warn: #8a5300;
+  --err: #b0261c;
+  --code-bg: #1b1a17;
+  --code-strip: #22211d;
+  --code-ink: #e9e5da;
+  --code-ink-3: #9c978a;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --paper: #131311;
+    --sheet: #1a1a17;
+    --well: #24231f;
+    --rule: #2f2e29;
+    --rule-strong: #45433c;
+    --ink: #eeebe3;
+    --ink-2: #c3bfb4;
+    --ink-3: #9a968b;
+    --accent: #e08257;
+    --accent-ink: #131311;
+    --ok: #7cc28a;
+    --warn: #e0a54a;
+    --err: #f08476;
+    --code-bg: #1b1a17;
+    --code-strip: #22211d;
+    --code-ink: #e9e5da;
+    --code-ink-3: #8f8a7e;
   }
 }
 
+@theme inline {
+  --color-paper: var(--paper);
+  --color-sheet: var(--sheet);
+  --color-well: var(--well);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-err: var(--err);
+  --color-code-bg: var(--code-bg);
+  --color-code-strip: var(--code-strip);
+  --color-code-ink: var(--code-ink);
+  --color-code-ink-3: var(--code-ink-3);
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+}
+
+html {
+  color-scheme: light dark;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans), system-ui, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-feature-settings: "ss02"; /* Plex's plain 'g' */
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* One focus treatment everywhere: a copper ring with clearance. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Small caps label used for section heads and field groups. */
+.label-caps {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
 }

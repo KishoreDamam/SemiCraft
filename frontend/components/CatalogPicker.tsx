@@ -60,23 +60,24 @@ export function CatalogPicker({
         type="search"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder={`Filter ${items.length} items…`}
+        placeholder={`Filter ${items.length} generators`}
         aria-label="Filter catalog"
-        className="w-full rounded border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+        className="h-8 w-full rounded-sm border border-rule-strong bg-sheet px-2 text-[13px] text-ink placeholder:text-ink-3 hover:border-ink-3"
       />
       <div
         ref={listRef}
         role="listbox"
         aria-label="Catalog"
-        className="flex max-h-[38vh] flex-col gap-2 overflow-y-auto rounded border border-zinc-200 p-1 dark:border-zinc-800"
+        className="-mx-1 flex max-h-[34vh] flex-col gap-3 overflow-y-auto px-1 py-1"
       >
         {GROUPS.map(({ kind, label }) => {
           const group = visible.filter((i) => i.kind === kind);
           if (group.length === 0) return null;
           return (
             <div key={kind} className="flex flex-col">
-              <h3 className="px-2 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
-                {label}
+              <h3 className="flex items-baseline justify-between px-2 pb-1">
+                <span className="label-caps">{label}</span>
+                <span className="font-mono text-[11px] text-ink-3">{group.length}</span>
               </h3>
               {group.map((item) => {
                 const active = item.id === selectedId;
@@ -88,19 +89,15 @@ export function CatalogPicker({
                     aria-selected={active}
                     title={item.description}
                     onClick={() => onSelect(item.id)}
-                    className={`flex items-center gap-2 rounded px-2 py-1 text-left text-sm transition-colors ${
-                      active
-                        ? "bg-blue-600 font-medium text-white"
-                        : "text-zinc-800 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                    className={`flex h-8 shrink-0 items-center gap-2 rounded-sm px-2 text-left text-sm ${
+                      active ? "bg-ink font-medium text-paper" : "text-ink hover:bg-well"
                     }`}
                   >
                     <span className="truncate">{item.name}</span>
                     {item.maturity === "beta" ? (
                       <span
-                        className={`ml-auto shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
-                          active
-                            ? "bg-white/20 text-white"
-                            : "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300"
+                        className={`ml-auto shrink-0 font-mono text-[11px] ${
+                          active ? "text-paper/80" : "text-warn"
                         }`}
                       >
                         beta
@@ -113,7 +110,7 @@ export function CatalogPicker({
           );
         })}
         {visible.length === 0 ? (
-          <p className="px-2 py-1 text-xs text-zinc-500">No items match “{query}”.</p>
+          <p className="px-2 py-1 text-sm text-ink-3">No items match “{query}”.</p>
         ) : null}
       </div>
     </div>

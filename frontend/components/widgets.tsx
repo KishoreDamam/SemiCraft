@@ -16,13 +16,13 @@ export function HelpTooltip({ text }: { text: string }) {
         tabIndex={0}
         role="img"
         aria-label={`Help: ${text}`}
-        className="flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-zinc-400 text-[10px] leading-none text-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-600 dark:text-zinc-400"
+        className="flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full border border-rule-strong font-mono text-[9px] leading-none text-ink-3 hover:border-ink-2 hover:text-ink"
       >
         ?
       </span>
       <span
         role="tooltip"
-        className="pointer-events-none absolute left-1/2 top-6 z-20 w-56 -translate-x-1/2 rounded border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-700 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+        className="pointer-events-none invisible absolute left-0 top-5 z-20 w-64 rounded-sm bg-ink px-2.5 py-2 text-xs font-normal normal-case leading-relaxed tracking-normal text-paper group-hover:visible group-focus-within:visible"
       >
         {text}
       </span>
@@ -44,17 +44,17 @@ export function FieldShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-1" data-field>
+    <div className="flex flex-col gap-1.5" data-field>
       <label
         htmlFor={htmlFor}
-        className="flex items-center text-xs font-medium text-zinc-700 dark:text-zinc-300"
+        className="flex items-center gap-1.5 text-[13px] font-medium text-ink-2"
       >
         {label}
         {description ? <HelpTooltip text={description} /> : null}
       </label>
       {children}
       {error ? (
-        <p role="alert" className="text-xs text-red-600 dark:text-red-400">
+        <p role="alert" className="text-xs text-err">
           {error}
         </p>
       ) : null}
@@ -79,8 +79,8 @@ export function SegmentedControl({
     <div
       role="radiogroup"
       aria-label={label}
-      className={`inline-flex overflow-hidden rounded border ${
-        invalid ? "border-red-500" : "border-zinc-300 dark:border-zinc-700"
+      className={`grid auto-cols-fr grid-flow-col overflow-hidden rounded-sm border bg-sheet ${
+        invalid ? "border-err" : "border-rule-strong"
       }`}
     >
       {options.map((opt) => {
@@ -92,11 +92,11 @@ export function SegmentedControl({
             role="radio"
             aria-checked={active}
             onClick={() => onChange(opt.value)}
-            className={`px-3 py-1 text-xs transition-colors ${
+            className={`h-8 truncate px-2.5 text-[13px] ${
               active
-                ? "bg-blue-600 text-white"
-                : "bg-white text-zinc-700 hover:bg-zinc-100 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            } ${opt !== options[options.length - 1] ? "border-r border-zinc-300 dark:border-zinc-700" : ""}`}
+                ? "bg-ink font-medium text-paper"
+                : "text-ink-2 hover:bg-well hover:text-ink"
+            } ${opt !== options[options.length - 1] ? "border-r border-rule-strong" : ""}`}
           >
             {opt.label}
           </button>
@@ -131,8 +131,8 @@ export function Dropdown({
         const chosen = options.find((o) => String(o.value) === e.target.value);
         if (chosen) onChange(chosen.value);
       }}
-      className={`w-full rounded border bg-white px-2 py-1 text-xs text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 ${
-        invalid ? "border-red-500" : "border-zinc-300 dark:border-zinc-700"
+      className={`h-8 w-full rounded-sm border bg-sheet px-2 text-[13px] text-ink ${
+        invalid ? "border-err" : "border-rule-strong hover:border-ink-3"
       }`}
     >
       {options.map((opt) => (
@@ -160,15 +160,16 @@ export function Toggle({
       aria-checked={value}
       aria-label={label}
       onClick={() => onChange(!value)}
-      className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors ${
-        value ? "bg-blue-600" : "bg-zinc-300 dark:bg-zinc-700"
+      className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-sm border ${
+        value ? "border-ink bg-ink" : "border-rule-strong bg-well"
       }`}
     >
       <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-          value ? "translate-x-4" : "translate-x-0.5"
+        className={`inline-block h-4 w-4 rounded-[2px] transition-transform duration-100 ${
+          value ? "translate-x-[22px] bg-paper" : "translate-x-[3px] bg-ink-3"
         }`}
       />
+      <span className="sr-only">{value ? "on" : "off"}</span>
     </button>
   );
 }
@@ -207,8 +208,8 @@ export function NumberInput({
         const n = Number(raw);
         onChange(Number.isNaN(n) ? undefined : n);
       }}
-      className={`w-full rounded border bg-white px-2 py-1 text-xs text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 ${
-        invalid ? "border-red-500" : "border-zinc-300 dark:border-zinc-700"
+      className={`h-8 w-full rounded-sm border bg-sheet px-2 font-mono text-[13px] text-ink ${
+        invalid ? "border-err" : "border-rule-strong hover:border-ink-3"
       }`}
     />
   );
@@ -258,9 +259,7 @@ export function ChipsInput({
       <div
         aria-label={label}
         role="group"
-        className={`flex flex-wrap gap-1 rounded border p-1 ${
-          invalid ? "border-red-500" : "border-zinc-300 dark:border-zinc-700"
-        }`}
+        className={`flex flex-wrap gap-1.5 ${invalid ? "rounded-sm outline outline-1 outline-err" : ""}`}
       >
         {itemEnum.map((opt) => {
           const selected = value.includes(String(opt.value));
@@ -274,10 +273,10 @@ export function ChipsInput({
                   ? onChange(value.filter((v) => v !== String(opt.value)))
                   : onChange([...value, String(opt.value)])
               }
-              className={`rounded px-2 py-0.5 text-xs transition-colors ${
+              className={`h-7 rounded-sm border px-2 font-mono text-xs ${
                 selected
-                  ? "bg-blue-600 text-white"
-                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                  ? "border-ink bg-ink text-paper"
+                  : "border-rule-strong bg-sheet text-ink-2 hover:border-ink-3 hover:text-ink"
               }`}
             >
               {opt.label}
@@ -290,21 +289,21 @@ export function ChipsInput({
 
   return (
     <div
-      className={`flex flex-wrap items-center gap-1 rounded border p-1 ${
-        invalid ? "border-red-500" : "border-zinc-300 dark:border-zinc-700"
+      className={`flex min-h-8 flex-wrap items-center gap-1 rounded-sm border bg-sheet p-1 focus-within:border-ink-3 ${
+        invalid ? "border-err" : "border-rule-strong"
       }`}
     >
       {value.map((item, idx) => (
         <span
           key={`${item}-${idx}`}
-          className="inline-flex items-center gap-1 rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-800 dark:bg-blue-900/50 dark:text-blue-200"
+          className="inline-flex h-6 items-center gap-1 rounded-sm bg-well pl-2 pr-1 font-mono text-xs text-ink"
         >
           {item}
           <button
             type="button"
             aria-label={`Remove ${item}`}
             onClick={() => remove(idx)}
-            className="text-blue-500 hover:text-blue-700 dark:text-blue-300"
+            className="flex h-4 w-4 items-center justify-center rounded-sm text-ink-3 hover:bg-ink hover:text-paper"
           >
             ×
           </button>
@@ -325,7 +324,7 @@ export function ChipsInput({
         }}
         onBlur={() => commit(draft)}
         placeholder="add…"
-        className="min-w-[4rem] flex-1 bg-transparent px-1 py-0.5 text-xs text-zinc-800 outline-none dark:text-zinc-200"
+        className="min-w-[4rem] flex-1 bg-transparent px-1 font-mono text-xs text-ink outline-none placeholder:text-ink-3"
       />
     </div>
   );

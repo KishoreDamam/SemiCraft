@@ -857,3 +857,26 @@ Frontend: 183 tests, lint and production build green. Not yet done from the
 review: one-command Docker Compose (UI + API + Verilator) so lint badges are
 real for users, LICENSE, tagging v0.3.0/v0.4.0, README rewrite for the current
 scope.
+
+### Visual design pass (same branch)
+
+The UI read as a default template. Redesigned as "a datasheet on a bench",
+with a checklist of AI-template tells as hard constraints (no purple/blue
+gradients, gradient text, glass, grain, emoji, Inter, Space Grotesk/Instrument
+Serif, serif-italic accents, icon-box rows, eyebrow badges over headlines,
+opacity-fade hovers, scroll fade-ins, stock shadcn/lucide, or em dashes in UI
+copy).
+
+- Tokens in `app/globals.css` (`paper`, `sheet`, `well`, `rule`, `ink`/`ink-2`/`ink-3`,
+  one copper `accent`, `ok`/`warn`/`err`, `code-*`), mapped into Tailwind via
+  `@theme inline`; dark mode flips the tokens, no per-component `dark:` classes.
+  Body text >= 7:1, secondary >= 4.5:1 in both schemes.
+- IBM Plex Sans + Plex Mono, self-hosted via `@fontsource` (no font CDN, same
+  reason as Monaco). Custom Monaco theme in the same palette.
+- Drawn QFP package mark (`components/Mark.tsx`) instead of an icon set.
+- Main column is a datasheet: name, description, then facts in mono (lint lamp,
+  kind, maturity, config hash); one primary action; code window with file tabs
+  in its title strip; explanation with section names in the margin.
+- Status shown as small lamps plus text, not pills.
+- Known gap: explanation text from the backend still contains em dashes; it is
+  generated content pinned by goldens, so changing it is a backend change.

@@ -78,8 +78,8 @@ describe("LintBadge — v2 list shape aggregation", () => {
 
   it("renders the placeholder for null/empty lint", () => {
     const { rerender } = render(<LintBadge lint={null} />);
-    expect(screen.getByText("Lint —")).toBeInTheDocument();
+    expect(screen.getByText(/Lint pending/)).toBeInTheDocument();
     rerender(<LintBadge lint={[]} />);
-    expect(screen.getByText("Lint —")).toBeInTheDocument();
+    expect(screen.getByText(/Lint pending/)).toBeInTheDocument();
   });
 });

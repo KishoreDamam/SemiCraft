@@ -4,6 +4,17 @@ import { useEffect, useState } from "react";
 import type { CatalogV2Response } from "@/lib/types";
 import { getCatalog } from "@/lib/api";
 import { GeneratorApp, useInitialPermalink } from "@/components/GeneratorApp";
+import { Mark } from "@/components/Mark";
+
+function catalogSummary(c: CatalogV2Response): string {
+  const n = (kind: string) => c.items.filter((i) => i.kind === kind).length;
+  const parts = [
+    [n("snippet"), "snippets"],
+    [n("module"), "modules"],
+    [n("ip"), "IP blocks"],
+  ].filter(([count]) => (count as number) > 0);
+  return parts.map(([count, noun]) => `${count} ${noun}`).join(" · ");
+}
 
 export default function Home() {
   const [catalog, setCatalog] = useState<CatalogV2Response | null>(null);
@@ -26,22 +37,35 @@ export default function Home() {
 
   return (
     <div className="flex min-h-screen flex-col lg:h-screen">
-      <header className="flex items-center gap-3 border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
-        <h1 className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
-          SemiCraft
-        </h1>
-        <span className="text-xs text-zinc-500">RTL, module &amp; IP generator</span>
+      <header className="flex h-14 shrink-0 items-center gap-4 border-b border-rule bg-paper px-4 lg:px-6">
+        <div className="flex items-center gap-2.5 text-ink">
+          <Mark className="h-6 w-6" />
+          <span className="text-[17px] font-semibold tracking-[-0.01em]">SemiCraft</span>
+        </div>
+        <span aria-hidden className="hidden h-5 w-px bg-rule sm:block" />
+        <p className="hidden text-sm text-ink-2 sm:block">
+          RTL, testbenches and IP from options you choose. Same options, same bytes.
+        </p>
+        {catalog ? (
+          <p className="ml-auto hidden font-mono text-xs text-ink-3 lg:block">
+            {catalogSummary(catalog)}
+          </p>
+        ) : null}
       </header>
 
       <div className="flex-1 lg:min-h-0">
         {error ? (
-          <p role="alert" className="p-4 text-sm text-red-600">
-            {error}
-          </p>
+          <div role="alert" className="mx-auto max-w-md px-6 py-16">
+            <p className="label-caps">Catalog unavailable</p>
+            <p className="mt-2 text-sm text-ink">{error}</p>
+            <p className="mt-1 text-sm text-ink-2">
+              Check that the API is running and NEXT_PUBLIC_API_BASE points at it.
+            </p>
+          </div>
         ) : catalog ? (
           <GeneratorApp catalog={catalog} initialState={initialState} />
         ) : (
-          <p className="p-4 text-sm text-zinc-500">Loading catalog…</p>
+          <p className="px-6 py-16 font-mono text-xs text-ink-3">Loading catalog…</p>
         )}
       </div>
     </div>
